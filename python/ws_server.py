@@ -182,6 +182,24 @@ async def level_broadcaster(connections: set):
         connections -= dead
 
 
+VIRTUAL_INPUTS = ('blackhole', 'voicemod', 'dubbing', 'virtual', 'loopback', 'soundflower', 'vb-audio', 'cable')
+
+
+def pick_real_mic():
+    """System default mic, unless it is a virtual device (another voice changer's
+    output, BlackHole...). Then prefer the built-in mic, then any real input."""
+    devs = sd.query_devices()
+    real = [i for i, d in enumerate(devs)
+            if d['max_input_channels'] > 0 and not any(k in d['name'].lower() for k in VIRTUAL_INPUTS)]
+    default_in = sd.default.device[0]
+    if isinstance(default_in, int) and default_in in real:
+        return default_in
+    for i in real:
+        if 'macbook' in devs[i]['name'].lower() or 'built-in' in devs[i]['name'].lower():
+            return i
+    return real[0] if real else None
+
+
 async def main():
     connections: set = set()
 
@@ -198,8 +216,8 @@ async def main():
     bh = engine.find_blackhole()
     # FIX #9/#10: use already-imported sd (not __import__) and guard against
     # sd.default.device returning -1 (no configured default input).
-    default_in = sd.default.device[0]
-    if bh is not None and isinstance(default_in, int) and default_in >= 0:
+    default_in = pick_real_mic()
+    if bh is not None and default_in is not None:
         print(f"[ws] Auto-starting: mic={default_in} → BlackHole={bh}")
         engine.start(default_in, bh)
     else:
