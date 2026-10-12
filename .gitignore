@@ -9,3 +9,4 @@ models/
 voicemod/
 *.dec
 *.dec.ogg
+.vercel/
