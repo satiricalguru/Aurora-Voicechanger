@@ -1,0 +1,601 @@
+{
+ "dsp": [
+  {
+   "id": "robot",
+   "name": "Robot",
+   "category": "Sci-Fi",
+   "color": "#00d4ff",
+   "type": "dsp"
+  },
+  {
+   "id": "alien",
+   "name": "Alien",
+   "category": "Sci-Fi",
+   "color": "#7fff00",
+   "type": "dsp"
+  },
+  {
+   "id": "android",
+   "name": "Android",
+   "category": "Sci-Fi",
+   "color": "#00ffcc",
+   "type": "dsp"
+  },
+  {
+   "id": "spacemen",
+   "name": "Spacemen",
+   "category": "Sci-Fi",
+   "color": "#4488ff",
+   "type": "dsp"
+  },
+  {
+   "id": "cybertune",
+   "name": "Cybertune",
+   "category": "Sci-Fi",
+   "color": "#ff00ff",
+   "type": "dsp"
+  },
+  {
+   "id": "ai_assistant",
+   "name": "AI Assistant",
+   "category": "Sci-Fi",
+   "color": "#00ff88",
+   "type": "dsp"
+  },
+  {
+   "id": "man_to_woman",
+   "name": "Man to Woman",
+   "category": "Gender",
+   "color": "#ff69b4",
+   "type": "dsp"
+  },
+  {
+   "id": "woman_to_man",
+   "name": "Woman to Man",
+   "category": "Gender",
+   "color": "#4169e1",
+   "type": "dsp"
+  },
+  {
+   "id": "adult_to_child",
+   "name": "Adult to Child",
+   "category": "Gender",
+   "color": "#ffd700",
+   "type": "dsp"
+  },
+  {
+   "id": "child_to_adult",
+   "name": "Child to Adult",
+   "category": "Gender",
+   "color": "#cd853f",
+   "type": "dsp"
+  },
+  {
+   "id": "dark",
+   "name": "Dark",
+   "category": "Dark",
+   "color": "#8b0000",
+   "type": "dsp"
+  },
+  {
+   "id": "demon",
+   "name": "Demon",
+   "category": "Dark",
+   "color": "#ff2200",
+   "type": "dsp"
+  },
+  {
+   "id": "dark_angel",
+   "name": "Dark Angel",
+   "category": "Dark",
+   "color": "#660066",
+   "type": "dsp"
+  },
+  {
+   "id": "zombie",
+   "name": "Zombie",
+   "category": "Dark",
+   "color": "#556b2f",
+   "type": "dsp"
+  },
+  {
+   "id": "venom",
+   "name": "Venom",
+   "category": "Dark",
+   "color": "#2d2d2d",
+   "type": "dsp"
+  },
+  {
+   "id": "spirit",
+   "name": "Ghost",
+   "category": "Dark",
+   "color": "#e0e0ff",
+   "type": "dsp"
+  },
+  {
+   "id": "chipmunk",
+   "name": "Chipmunk",
+   "category": "Fun",
+   "color": "#ff8c00",
+   "type": "dsp"
+  },
+  {
+   "id": "baby",
+   "name": "Baby",
+   "category": "Fun",
+   "color": "#ffb6c1",
+   "type": "dsp"
+  },
+  {
+   "id": "helium",
+   "name": "Helium",
+   "category": "Fun",
+   "color": "#ff1493",
+   "type": "dsp"
+  },
+  {
+   "id": "ogre",
+   "name": "Ogre",
+   "category": "Fun",
+   "color": "#228b22",
+   "type": "dsp"
+  },
+  {
+   "id": "crazy",
+   "name": "Crazy",
+   "category": "Fun",
+   "color": "#ff4500",
+   "type": "dsp"
+  },
+  {
+   "id": "crazy_clown",
+   "name": "Crazy Clown",
+   "category": "Fun",
+   "color": "#ff0000",
+   "type": "dsp"
+  },
+  {
+   "id": "telephone",
+   "name": "Telephone",
+   "category": "Comm",
+   "color": "#808080",
+   "type": "dsp"
+  },
+  {
+   "id": "cop_radio",
+   "name": "Cop Radio",
+   "category": "Comm",
+   "color": "#4682b4",
+   "type": "dsp"
+  },
+  {
+   "id": "walkie_talkie",
+   "name": "Walkie-Talkie",
+   "category": "Comm",
+   "color": "#556b2f",
+   "type": "dsp"
+  },
+  {
+   "id": "megaphone",
+   "name": "Megaphone",
+   "category": "Comm",
+   "color": "#ff8c00",
+   "type": "dsp"
+  },
+  {
+   "id": "cave",
+   "name": "Cave",
+   "category": "Environment",
+   "color": "#8b7355",
+   "type": "dsp"
+  },
+  {
+   "id": "cathedral",
+   "name": "Cathedral",
+   "category": "Environment",
+   "color": "#9370db",
+   "type": "dsp"
+  },
+  {
+   "id": "underwater",
+   "name": "Underwater",
+   "category": "Environment",
+   "color": "#0080ff",
+   "type": "dsp"
+  },
+  {
+   "id": "magic_chords",
+   "name": "Magic Chords",
+   "category": "Musical",
+   "color": "#ffd700",
+   "type": "dsp"
+  },
+  {
+   "id": "autotune",
+   "name": "Autotune",
+   "category": "Musical",
+   "color": "#00fa9a",
+   "type": "dsp"
+  },
+  {
+   "id": "vibrato_voice",
+   "name": "Vibrato",
+   "category": "Musical",
+   "color": "#ff69b4",
+   "type": "dsp"
+  },
+  {
+   "id": "double_voice",
+   "name": "Double Voice",
+   "category": "Musical",
+   "color": "#40e0d0",
+   "type": "dsp"
+  },
+  {
+   "id": "octaver",
+   "name": "Octaver",
+   "category": "Musical",
+   "color": "#ff6347",
+   "type": "dsp"
+  },
+  {
+   "id": "wah_wah",
+   "name": "Wah-Wah",
+   "category": "Musical",
+   "color": "#ff8c00",
+   "type": "dsp"
+  },
+  {
+   "id": "deep_voice",
+   "name": "Deep Voice",
+   "category": "Character",
+   "color": "#8b4513",
+   "type": "dsp"
+  },
+  {
+   "id": "storyteller",
+   "name": "Storyteller",
+   "category": "Character",
+   "color": "#deb887",
+   "type": "dsp"
+  },
+  {
+   "id": "whisper",
+   "name": "Whisper",
+   "category": "Character",
+   "color": "#c0c0c0",
+   "type": "dsp"
+  },
+  {
+   "id": "speech_jammer",
+   "name": "Speech Jammer",
+   "category": "Character",
+   "color": "#ff4500",
+   "type": "dsp"
+  },
+  {
+   "id": "8bit",
+   "name": "8-Bit",
+   "category": "Retro",
+   "color": "#00ff00",
+   "type": "dsp"
+  },
+  {
+   "id": "cs_ct",
+   "name": "CS Counter-Terrorist",
+   "category": "Gaming",
+   "color": "#1e90ff",
+   "type": "dsp"
+  },
+  {
+   "id": "cs_t",
+   "name": "CS Terrorist",
+   "category": "Gaming",
+   "color": "#ff4500",
+   "type": "dsp"
+  },
+  {
+   "id": "announcer",
+   "name": "Game Announcer",
+   "category": "Gaming",
+   "color": "#ffd700",
+   "type": "dsp"
+  },
+  {
+   "id": "streamer",
+   "name": "Streamer",
+   "category": "Gaming",
+   "color": "#9146ff",
+   "type": "dsp"
+  },
+  {
+   "id": "possessed",
+   "name": "Possessed",
+   "category": "Horror",
+   "color": "#4b0082",
+   "type": "dsp"
+  },
+  {
+   "id": "exorcist",
+   "name": "Exorcist",
+   "category": "Horror",
+   "color": "#8b0000",
+   "type": "dsp"
+  },
+  {
+   "id": "forest",
+   "name": "Forest Spirit",
+   "category": "Nature",
+   "color": "#228b22",
+   "type": "dsp"
+  },
+  {
+   "id": "wind",
+   "name": "Wind",
+   "category": "Nature",
+   "color": "#87ceeb",
+   "type": "dsp"
+  },
+  {
+   "id": "bypass",
+   "name": "Original Voice",
+   "category": "None",
+   "color": "#666680",
+   "type": "dsp"
+  }
+ ],
+ "ai": [
+  {
+   "id": "akatsume",
+   "name": "Akuma Rei",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#cc00ff",
+   "description": "Dark demon anime girl — menacing villain",
+   "type": "ai"
+  },
+  {
+   "id": "genki",
+   "name": "Hina",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#00aaff",
+   "description": "Energetic anime girl — bright and cheerful",
+   "type": "ai"
+  },
+  {
+   "id": "kawaii",
+   "name": "Mochi",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#ff69b4",
+   "description": "Super cute cat-girl — soft kawaii voice",
+   "type": "ai"
+  },
+  {
+   "id": "yoen",
+   "name": "Yoru",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#6600cc",
+   "description": "Dark anime girl — mysterious, cool, emotionless",
+   "type": "ai"
+  },
+  {
+   "id": "lovely",
+   "name": "Stella",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#ff99cc",
+   "description": "Magical girl — sweet idol voice",
+   "type": "ai"
+  },
+  {
+   "id": "akari",
+   "name": "Luna",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#00ddff",
+   "description": "Vtuber-style anime girl — clean streamer voice",
+   "type": "ai"
+  },
+  {
+   "id": "kidol",
+   "name": "Nova",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#00ffcc",
+   "description": "K-pop idol — polished, bright, high-energy",
+   "type": "ai"
+  },
+  {
+   "id": "cartoon_girl",
+   "name": "Pippa",
+   "category": "AI Voices",
+   "tag": "ANIME",
+   "color": "#ffcc00",
+   "description": "Classic cartoon — exaggerated, bouncy",
+   "type": "ai"
+  },
+  {
+   "id": "corinne",
+   "name": "Claire",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#c8a882",
+   "description": "Calm, confident adult woman — natural accent",
+   "type": "ai"
+  },
+  {
+   "id": "jennifer",
+   "name": "Emma",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#ff8844",
+   "description": "Warm, friendly young woman",
+   "type": "ai"
+  },
+  {
+   "id": "vicky",
+   "name": "Scarlett",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#dd4444",
+   "description": "Dramatic woman — theatrical, wide dynamic range",
+   "type": "ai"
+  },
+  {
+   "id": "haley",
+   "name": "Maddie",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#ff6699",
+   "description": "Cheerful girl — bright, friendly, light",
+   "type": "ai"
+  },
+  {
+   "id": "claudia",
+   "name": "Margot",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#9988bb",
+   "description": "Mature, sophisticated woman — 40s, elegant",
+   "type": "ai"
+  },
+  {
+   "id": "blake",
+   "name": "Riley",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#cc55ff",
+   "description": "Cool, edgy — alt girl, slightly raspy",
+   "type": "ai"
+  },
+  {
+   "id": "alice",
+   "name": "Director Hale",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#445588",
+   "description": "Stern, commanding — authoritative, no-nonsense",
+   "type": "ai"
+  },
+  {
+   "id": "agatha",
+   "name": "Grandma Rose",
+   "category": "AI Voices",
+   "tag": "REALISTIC",
+   "color": "#ddccaa",
+   "description": "Sweet grandmother — warm, elderly, kind",
+   "type": "ai"
+  },
+  {
+   "id": "creepy_girl",
+   "name": "Hollow",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#880000",
+   "description": "Horror child — uncanny valley, unsettling",
+   "type": "ai"
+  },
+  {
+   "id": "runic_sorceress",
+   "name": "Runeweaver",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#550088",
+   "description": "Dark fantasy sorceress — ancient, mystical",
+   "type": "ai"
+  },
+  {
+   "id": "ping",
+   "name": "Shade",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#334455",
+   "description": "Mysterious hooded girl — quiet, haunted",
+   "type": "ai"
+  },
+  {
+   "id": "fox",
+   "name": "Kitsune",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#ff6600",
+   "description": "Cunning, sly — low, smoky character",
+   "type": "ai"
+  },
+  {
+   "id": "shiva",
+   "name": "Valka",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#884400",
+   "description": "Fierce warrior — intense, battle-hardened",
+   "type": "ai"
+  },
+  {
+   "id": "angry_girl",
+   "name": "Fury",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#ff2200",
+   "description": "Rage mode — furious, unhinged",
+   "type": "ai"
+  },
+  {
+   "id": "field",
+   "name": "Sentinel",
+   "category": "AI Voices",
+   "tag": "DARK",
+   "color": "#336644",
+   "description": "Military operative — masked, tactical command",
+   "type": "ai"
+  },
+  {
+   "id": "mother_entity",
+   "name": "The Matriarch",
+   "category": "AI Voices",
+   "tag": "CREATURE",
+   "color": "#003322",
+   "description": "Ancient cosmic horror — alien intelligence",
+   "type": "ai"
+  },
+  {
+   "id": "aetherian",
+   "name": "Xyra",
+   "category": "AI Voices",
+   "tag": "CREATURE",
+   "color": "#00ff88",
+   "description": "Cybernetic alien warrior — metallic, otherworldly",
+   "type": "ai"
+  },
+  {
+   "id": "farty_kawaii",
+   "name": "Gobbie",
+   "category": "AI Voices",
+   "tag": "CREATURE",
+   "color": "#88ff44",
+   "description": "Chaotic goblin girl — cute gone wrong",
+   "type": "ai"
+  },
+  {
+   "id": "guardian_doll",
+   "name": "Porcelain",
+   "category": "AI Voices",
+   "tag": "CREATURE",
+   "color": "#eeddcc",
+   "description": "Creepy porcelain doll — eerily perfect",
+   "type": "ai"
+  },
+  {
+   "id": "the_ringer",
+   "name": "Skullhorn",
+   "category": "AI Voices",
+   "tag": "CREATURE",
+   "color": "#664400",
+   "description": "Beast mask — animalistic, primal, monstrous",
+   "type": "ai"
+  }
+ ]
+}
