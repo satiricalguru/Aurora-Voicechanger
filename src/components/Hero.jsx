@@ -1,7 +1,6 @@
 import { motion, useScroll, useTransform, AnimatePresence } from 'framer-motion';
 import { Power, Headphones, ArrowDown, Info } from 'lucide-react';
 import { actions } from '../lib/engine';
-import { faceFor } from '../lib/faces';
 
 const ease = [0.16, 1, 0.3, 1];
 
@@ -38,21 +37,6 @@ export default function Hero({ engine, voice, onNav }) {
           >
             {name}
           </motion.h1>
-        </AnimatePresence>
-        <AnimatePresence mode="wait">
-          {voice && faceFor(voice.id) && (
-            <motion.img
-              key={voice.id}
-              className="hero-face"
-              src={faceFor(voice.id)}
-              alt=""
-              style={{ '--c': voice.color }}
-              initial={{ opacity: 0, scale: 0.85, rotate: -6 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              exit={{ opacity: 0, scale: 0.9 }}
-              transition={{ duration: 0.6, ease }}
-            />
-          )}
         </AnimatePresence>
         <p className="lede">{sub}</p>
 

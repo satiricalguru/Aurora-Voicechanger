@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles, Flame } from 'lucide-react';
+import { Mic, Info, Flame } from 'lucide-react';
 import { actions } from '../lib/engine';
 import { RevealLines, FadeUp, staggerParent, staggerChild } from './Reveal';
 import Orb from './Orb';
@@ -58,7 +58,7 @@ export default function Characters({ engine }) {
                     {PILLS[v.id] === 'hot' && <Flame size={10} strokeWidth={2.5} />}{PILLS[v.id].toUpperCase()}
                   </span>
                 )}
-                <span className="face-badge" aria-hidden="true"><Sparkles size={12} strokeWidth={2.2} /></span>
+                <span className="face-badge" aria-hidden="true"><Mic size={13} strokeWidth={2.2} /></span>
                 {on && <span className="face-live" aria-label="Active" />}
               </span>
               <span className="face-name">{v.name}</span>
@@ -67,7 +67,7 @@ export default function Characters({ engine }) {
         })}
       </motion.div>
 
-      <p className="note"><Sparkles size={13} /> These run on the DSP engine today. Neural voice models (Beatrice 2) slot in here next for true voice conversion.</p>
+      <p className="note"><Info size={13} /> These run on the DSP engine today. Neural voice models (Beatrice 2) slot in here next for true voice conversion.</p>
     </section>
   );
 }
