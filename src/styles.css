@@ -230,6 +230,32 @@ input, select { font: inherit; color: inherit; }
   padding: 4px 8px; border-radius: var(--r-pill); background: #fff; color: #000;
 }
 
+/* Character grid: round face avatars, name underneath */
+.face-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 26px 12px; }
+.face-item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 4px; border-radius: 16px; text-align: center; }
+.face-ring {
+  position: relative; width: 96px; height: 96px; border-radius: 50%; padding: 3px;
+  background: rgba(255,255,255,0.08); transition: transform .45s var(--ease-out), background .3s, box-shadow .3s;
+}
+.face-ring img, .face-ring .orb { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: block; background: var(--surface-1); }
+.face-ring img { image-rendering: auto; }
+.face-item:hover .face-ring { transform: translateY(-3px) scale(1.04); background: rgba(255,255,255,0.22); }
+.face-item.on .face-ring {
+  background: conic-gradient(from 200deg, #fff, var(--c), #a887dc, #fff);
+  box-shadow: 0 0 0 4px rgba(0,0,0,1), 0 0 34px -4px var(--c);
+}
+.face-badge {
+  position: absolute; right: -2px; bottom: 4px; font-family: var(--mono); font-size: 9px; letter-spacing: .06em; font-weight: 600;
+  padding: 2px 6px; border-radius: var(--r-pill); background: #fff; color: #000; box-shadow: 0 0 0 2px #000;
+}
+.face-live {
+  position: absolute; left: 6px; top: 6px; width: 12px; height: 12px; border-radius: 50%;
+  background: var(--ok); box-shadow: 0 0 0 2px #000, 0 0 10px var(--ok);
+}
+.face-name { font-size: 14px; font-weight: 600; letter-spacing: -0.02em; margin-top: 8px; color: var(--text-2); }
+.face-item.on .face-name, .face-item:hover .face-name { color: #fff; }
+.face-tag { font-size: 11px; color: var(--text-4); }
+
 /* CSS colour sphere (ElevenLabs product orb) */
 .orb {
   --size: 64px; width: var(--size); height: var(--size); border-radius: 50%; position: relative; flex: none;

@@ -1,7 +1,8 @@
 """Split a generated portrait sheet (grid with dark gutters) into square avatars.
 
-usage: python3 tools/split_sheet.py sheet.jpg out_dir id1,id2,... [rows cols]
+usage: python3 tools/split_sheet.py sheet.jpg out_dir id1,id2,... [rows cols] [--face]
 Ids map left-to-right, top-to-bottom; use '-' to skip a tile.
+--face crops tight around the face for round avatars instead of head-and-shoulders.
 """
 import sys, os
 import numpy as np
@@ -28,8 +29,10 @@ def bands(dark_frac, n, min_len):
 
 
 def main():
-    src, out, ids = sys.argv[1], sys.argv[2], sys.argv[3].split(',')
-    rows, cols = (int(sys.argv[4]), int(sys.argv[5])) if len(sys.argv) > 5 else (3, 3)
+    face = '--face' in sys.argv
+    args = [a for a in sys.argv[1:] if a != '--face']
+    src, out, ids = args[0], args[1], args[2].split(',')
+    rows, cols = (int(args[3]), int(args[4])) if len(args) > 4 else (3, 3)
     img = Image.open(src).convert('RGB')
     a = np.asarray(img).astype(np.float32)
     lum = a.mean(axis=2)
@@ -44,9 +47,16 @@ def main():
                 pad = 6
                 tile = img.crop((x0 + pad, y0 + pad, x1 - pad, y1 - pad))
                 s = min(tile.size)
-                l = (tile.width - s) // 2
-                t = max(0, (tile.height - s) // 3)  # bias toward the face
-                tile = tile.crop((l, t, l + s, t + s)).resize((512, 512), Image.LANCZOS)
+                if face:
+                    # Faces sit centred, a little above the middle of each tile.
+                    f = int(s * 0.74)
+                    cx, cy = tile.width // 2, int(tile.height * 0.46)
+                    l, t = cx - f // 2, max(0, cy - f // 2)
+                    tile = tile.crop((l, t, l + f, t + f)).resize((384, 384), Image.LANCZOS)
+                else:
+                    l = (tile.width - s) // 2
+                    t = max(0, (tile.height - s) // 3)  # bias toward the face
+                    tile = tile.crop((l, t, l + s, t + s)).resize((512, 512), Image.LANCZOS)
                 tile.save(os.path.join(out, f'{ids[k]}.jpg'), quality=86, optimize=True)
             k += 1
     print('rows', ys, 'cols', xs)

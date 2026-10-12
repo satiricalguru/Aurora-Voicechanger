@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { Sparkles } from 'lucide-react';
 import { actions } from '../lib/engine';
 import { RevealLines, FadeUp, staggerParent, staggerChild } from './Reveal';
@@ -33,34 +33,32 @@ export default function Characters({ engine }) {
         </FadeUp>
       </div>
 
-      <motion.div className="grid-voices" variants={staggerParent} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-5% 0px' }} key={tag}>
-        <AnimatePresence>
-          {list.map(v => {
-            const on = engine.activeVoice === v.id;
-            return (
-              <motion.button
-                layout
-                key={v.id}
-                variants={staggerChild}
-                className={`vcard ${on ? 'on' : ''}`}
-                style={{ '--c': v.color }}
-                onClick={() => actions.setVoice(v.id)}
-                whileTap={{ scale: 0.98 }}
-              >
-                {faceFor(v.id)
-                  ? <img className="portrait" src={faceFor(v.id)} alt="" loading="lazy" draggable="false" />
-                  : <><span className="glow" /><Orb color={v.color} /></>}
-                {on && <span className="live-badge">LIVE</span>}
-                <span className="tag">{LABEL[v.tag] || v.tag}</span>
-                <span className="name">{v.name}</span>
-                <span className="desc">{v.description}</span>
-              </motion.button>
-            );
-          })}
-        </AnimatePresence>
-        {!engine.aiVoices.length && Array.from({ length: 8 }).map((_, i) => (
-          <motion.div key={i} variants={staggerChild} className="vcard" style={{ opacity: 0.4 }} />
-        ))}
+      <motion.div className="face-grid" variants={staggerParent} initial="hidden" whileInView="show" viewport={{ once: true, margin: '-5% 0px' }} key={tag}>
+        {list.map(v => {
+          const on = engine.activeVoice === v.id;
+          const src = faceFor(v.id);
+          return (
+            <motion.button
+              key={v.id}
+              variants={staggerChild}
+              className={`face-item ${on ? 'on' : ''}`}
+              style={{ '--c': v.color }}
+              onClick={() => actions.setVoice(v.id)}
+              title={v.description}
+              aria-pressed={on}
+            >
+              <span className="face-ring">
+                {src
+                  ? <img src={src} alt="" loading="lazy" draggable="false" />
+                  : <Orb color={v.color} size={92} />}
+                <span className="face-badge">AI</span>
+                {on && <span className="face-live" aria-label="Active" />}
+              </span>
+              <span className="face-name">{v.name}</span>
+              <span className="face-tag">{LABEL[v.tag] || v.tag}</span>
+            </motion.button>
+          );
+        })}
       </motion.div>
 
       <p className="note"><Sparkles size={13} /> These run on the DSP engine today. Neural voice models (Beatrice 2) slot in here next for true voice conversion.</p>
