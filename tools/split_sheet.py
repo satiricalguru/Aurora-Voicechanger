@@ -49,10 +49,10 @@ def main():
                 s = min(tile.size)
                 if face:
                     # Faces sit centred, a little above the middle of each tile.
-                    f = int(s * 0.74)
-                    cx, cy = tile.width // 2, int(tile.height * 0.46)
+                    f = int(s * 0.86)
+                    cx, cy = tile.width // 2, int(tile.height * 0.5)
                     l, t = cx - f // 2, max(0, cy - f // 2)
-                    tile = tile.crop((l, t, l + f, t + f)).resize((384, 384), Image.LANCZOS)
+                    tile = tile.crop((l, t, l + f, t + f)).resize((400, 400), Image.LANCZOS)
                 else:
                     l = (tile.width - s) // 2
                     t = max(0, (tile.height - s) // 3)  # bias toward the face

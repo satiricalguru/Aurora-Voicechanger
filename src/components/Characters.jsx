@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Flame } from 'lucide-react';
 import { actions } from '../lib/engine';
 import { RevealLines, FadeUp, staggerParent, staggerChild } from './Reveal';
 import Orb from './Orb';
 import { faceFor } from '../lib/faces';
 
 const TAGS = ['All', 'ANIME', 'REALISTIC', 'DARK', 'CREATURE'];
+// Pill tags on the top edge of an avatar, like a store front.
+const PILLS = { kawaii: 'new', akari: 'hot', kidol: 'new', akatsume: 'hot', runic_sorceress: 'new', fox: 'hot', aetherian: 'new' };
 const LABEL = { All: 'All', ANIME: 'Anime', REALISTIC: 'Real people', DARK: 'Dark', CREATURE: 'Creatures' };
 
 export default function Characters({ engine }) {
@@ -50,12 +52,16 @@ export default function Characters({ engine }) {
               <span className="face-ring">
                 {src
                   ? <img src={src} alt="" loading="lazy" draggable="false" />
-                  : <Orb color={v.color} size={92} />}
-                <span className="face-badge">AI</span>
+                  : <Orb color={v.color} size={112} />}
+                {PILLS[v.id] && (
+                  <span className={`face-pill ${PILLS[v.id]}`}>
+                    {PILLS[v.id] === 'hot' && <Flame size={10} strokeWidth={2.5} />}{PILLS[v.id].toUpperCase()}
+                  </span>
+                )}
+                <span className="face-badge" aria-hidden="true"><Sparkles size={12} strokeWidth={2.2} /></span>
                 {on && <span className="face-live" aria-label="Active" />}
               </span>
               <span className="face-name">{v.name}</span>
-              <span className="face-tag">{LABEL[v.tag] || v.tag}</span>
             </motion.button>
           );
         })}
