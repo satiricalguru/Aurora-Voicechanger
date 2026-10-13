@@ -29,7 +29,7 @@ npm install
 npm run dev
 ```
 
-Electron starts the Python audio engine (`python/ws_server.py`, `ws://localhost:9001`). In Setup, send the changed voice to **BlackHole 2ch**, then pick BlackHole as the microphone in Discord, OBS, Zoom or your game.
+Build the native engine first (`npm run build:native`, needs Xcode command-line tools and CMake). Electron starts `python/ws_server.py` (`ws://localhost:9001`), which drives the native engine; set `AURORA_ENGINE=python` to use the old Python engine. In Setup, send the changed voice to **BlackHole 2ch**, then pick BlackHole as the microphone in Discord, OBS, Zoom or your game.
 
 Hotkeys: **F1** voice on/off · **F4** show/hide window.
 
@@ -38,7 +38,8 @@ Hotkeys: **F1** voice on/off · **F4** show/hide window.
 | Path | What it is |
 | --- | --- |
 | `electron/` | Window, tray, menu, global hotkeys; spawns the engine |
-| `python/` | Audio engine: 48 kHz, 256-sample blocks, DSP effect chains, character personas |
+| `native/aurora-core/` | Native C++ engine: CoreAudio HAL I/O, low-delay pitch/formant shifter, all voices ([details](native/aurora-core/README.md)) |
+| `python/` | WebSocket control server, voice presets, ctypes bridge (`native_engine.py`), legacy Python engine |
 | `src/gl/AuroraScene.js` | WebGL aurora background and audio-reactive sphere (three.js) |
 | `src/lib/engine.js` | WebSocket store; meters and spectrum bypass React and feed the GL scene |
 | `src/components/` | Live, Characters, Effects, Soundboard, Voice Lab, Setup, Dock |
@@ -48,13 +49,14 @@ Hotkeys: **F1** voice on/off · **F4** show/hide window.
 
 ## Roadmap
 
-1. **Measure**: loopback click test for true end-to-end latency
-2. **Neural voices**: integrate Beatrice 2 (MIT, ~50 ms) for real voice conversion of the characters
-3. **Native engine**: move the audio callback to C++/Rust with CoreAudio and ONNX Runtime; target under 15 ms for effects
-4. **Own streaming model** with licensed voice-actor data and quality tiers
-5. Windows build (WASAPI, virtual mic driver)
+1. ~~**Measure**: loopback latency test~~ (native engine measures it with host timestamps)
+2. ~~**Native engine**: CoreAudio + C++~~ (done: ~8–12 ms after the mic at 64-frame buffers, all 77 voices)
+3. **Own virtual mic** (AudioServerPlugIn) to replace BlackHole
+4. **Neural voices**: streaming voice conversion on a real-time worker thread
+5. **Own streaming model** with licensed voice-actor data and quality tiers
+6. Windows build (WASAPI, virtual mic driver)
 
-Current device-side latency on a MacBook Air mic into BlackHole is about 71 ms; most of it is the input path, which step 3 addresses.
+Measured on a MacBook Air M2 into BlackHole: 38–42 ms end to end, of which ~31 ms is the built-in mic's own reported latency. A USB or interface mic avoids most of that.
 
 ## Licence
 

@@ -1,8 +1,29 @@
 import { motion } from 'framer-motion';
+import { findBlackHole } from '../lib/demo';
 
 export default function TitleBar({ sections, active, onNav, engine }) {
-  const state = !engine.connected ? 'off' : engine.running ? 'live' : 'ready';
-  const label = { off: 'Engine offline', live: engine.bypass ? 'Voice off' : 'Live', ready: 'No output' }[state];
+  let state = 'off';
+  let label = 'Engine offline';
+  if (engine.connected) {
+    if (engine.running && !engine.bypass) {
+      state = 'live';
+      label = 'Live';
+    } else if (engine.running && engine.bypass) {
+      state = 'ready';
+      label = 'Voice off';
+    } else if (!findBlackHole(engine.devices)) {
+      state = 'ready';
+      label = 'Need BlackHole';
+    } else {
+      state = 'ready';
+      label = 'Ready';
+    }
+  }
+  if (engine.lastError) {
+    state = 'off';
+    label = 'Error';
+  }
+
   return (
     <header className="titlebar">
       <div className="brand"><span className="brand-dot" />Aurora Voice</div>
@@ -16,7 +37,7 @@ export default function TitleBar({ sections, active, onNav, engine }) {
           </button>
         ))}
       </nav>
-      <div className={`conn ${state}`}><i />{label}</div>
+      <div className={`conn ${state}`} title={engine.lastError || undefined}><i />{label}</div>
     </header>
   );
 }

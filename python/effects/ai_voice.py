@@ -127,10 +127,10 @@ class AIVoicePersona(BaseEffect):
             self._voiced_frames = 0
         semitones = self._last_semitones
 
-        # ── 3. Vibrato (single chunk-level LFO — no per-sample loop) ──
+        # ── 3. Vibrato (chunk-level LFO; advance by samples in this block) ──
         if self.vibrato_rate > 0 and self.vibrato_depth > 0:
             vib = np.sin(2.0 * np.pi * self._vib_phase)
-            self._vib_phase = (self._vib_phase + self.vibrato_rate / self._sr) % 1.0
+            self._vib_phase = (self._vib_phase + self.vibrato_rate * n / self._sr) % 1.0
             semitones += vib * (self.vibrato_depth / 100.0)
 
         # ── 4. Phase vocoder pitch + formant shift ────────────────────

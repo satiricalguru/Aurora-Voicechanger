@@ -1,14 +1,12 @@
 import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Mic, Info, Flame } from 'lucide-react';
+import { Mic } from 'lucide-react';
 import { actions } from '../lib/engine';
 import { RevealLines, FadeUp, staggerParent, staggerChild } from './Reveal';
 import Orb from './Orb';
 import { faceFor } from '../lib/faces';
 
 const TAGS = ['All', 'ANIME', 'REALISTIC', 'DARK', 'CREATURE'];
-// Pill tags on the top edge of an avatar, like a store front.
-const PILLS = { kawaii: 'new', akari: 'hot', kidol: 'new', akatsume: 'hot', runic_sorceress: 'new', fox: 'hot', aetherian: 'new' };
 const LABEL = { All: 'All', ANIME: 'Anime', REALISTIC: 'Real people', DARK: 'Dark', CREATURE: 'Creatures' };
 
 export default function Characters({ engine }) {
@@ -23,7 +21,7 @@ export default function Characters({ engine }) {
       <div className="section-head">
         <div>
           <div className="eyebrow">01 · Characters</div>
-          <RevealLines className="h-section" lines={['Anime heroes and', <span className="dim" key="d">real human voices.</span>]} />
+          <RevealLines className="h-section" lines={['Anime heroes and', <span className="dim" key="d">styled voices.</span>]} />
           <FadeUp><p className="lede">Each character has its own pitch range, formants, breath and colour. Tap one and talk.</p></FadeUp>
         </div>
         <FadeUp delay={0.1}>
@@ -53,11 +51,6 @@ export default function Characters({ engine }) {
                 {src
                   ? <img src={src} alt="" loading="lazy" draggable="false" />
                   : <Orb color={v.color} size={112} />}
-                {PILLS[v.id] && (
-                  <span className={`face-pill ${PILLS[v.id]}`}>
-                    {PILLS[v.id] === 'hot' && <Flame size={10} strokeWidth={2.5} />}{PILLS[v.id].toUpperCase()}
-                  </span>
-                )}
                 <span className="face-badge" aria-hidden="true"><Mic size={13} strokeWidth={2.2} /></span>
                 {on && <span className="face-live" aria-label="Active" />}
               </span>
@@ -66,8 +59,6 @@ export default function Characters({ engine }) {
           );
         })}
       </motion.div>
-
-      <p className="note"><Info size={13} /> These run on the DSP engine today. Neural voice models (Beatrice 2) slot in here next for true voice conversion.</p>
     </section>
   );
 }

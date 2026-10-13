@@ -10,3 +10,4 @@ voicemod/
 *.dec
 *.dec.ogg
 .vercel/
+native/aurora-core/build/

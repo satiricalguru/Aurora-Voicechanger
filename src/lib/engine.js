@@ -18,7 +18,6 @@ export const live = {
   outDb: -96,
   gateDb: -96,
   bands: new Array(24).fill(0),
-  // smoothed 0..1 values the visuals use
   level: 0,
   inLevel: 0,
 };
@@ -30,9 +29,8 @@ let state = {
   bypass: false,
   activeVoice: null,
   devices: [],
-  // Shown until the engine sends its own list (tools/export_voices.py keeps this in sync).
   dspVoices: bundledVoices.dsp,
-  aiVoices: bundledVoices.ai,
+  aiVoices: (bundledVoices.ai || []).map(normalizeCharacter),
   settings: {
     vol_mic: 1, vol_voice: 1, vol_sound: 1, vol_monitor: 1,
     noise_reduction_enabled: false, noise_gate_enabled: true, noise_gate_level: -44,
@@ -40,12 +38,21 @@ let state = {
   latency: null,
   route: { input: null, output: null },
   lastError: null,
+  backend: 'python',
 };
 
 const listeners = new Set();
 function setState(patch) {
   state = { ...state, ...patch };
   listeners.forEach(l => l());
+}
+
+function normalizeCharacter(v) {
+  return {
+    ...v,
+    category: 'Characters',
+    type: v.type === 'ai' || v.type === 'neural' ? v.type : 'character',
+  };
 }
 
 let socket = null;
@@ -62,6 +69,7 @@ function connect() {
     send({ cmd: 'get_voices' });
     send({ cmd: 'get_audio_settings' });
     send({ cmd: 'get_latency' });
+    send({ cmd: 'get_backend' });
   };
   socket.onmessage = (e) => {
     try { handle(JSON.parse(e.data)); } catch { /* ignore malformed */ }
@@ -88,21 +96,32 @@ function handle(msg) {
       if (typeof msg.bypass === 'boolean' && msg.bypass !== state.bypass) patch.bypass = msg.bypass;
       if (msg.voice !== undefined && msg.voice !== state.activeVoice) patch.activeVoice = msg.voice;
       if (msg.latency) patch.latency = msg.latency;
+      if (msg.error) patch.lastError = msg.error;
       if (Object.keys(patch).length) setState(patch);
       break;
     }
+    case 'virtual_mic':
+      setState({ lastError: msg.ok ? null : (msg.msg || 'Virtual mic install failed') });
+      break;
     case 'devices': setState({ devices: msg.list || [] }); break;
-    case 'voices': setState({ dspVoices: msg.dsp || [], aiVoices: msg.ai || [] }); break;
+    case 'voices':
+      setState({
+        dspVoices: msg.dsp || [],
+        aiVoices: (msg.ai || []).map(normalizeCharacter),
+      });
+      break;
     case 'voice_set': setState({ activeVoice: msg.id }); break;
     case 'bypass': setState({ bypass: msg.value }); break;
     case 'monitor': setState({ monitoring: msg.active }); break;
     case 'audio_settings': setState({ settings: msg.settings }); break;
     case 'latency': setState({ latency: { ...msg } }); break;
+    case 'backend': setState({ backend: msg.backend || 'python' }); break;
     case 'status':
       setState({
         running: msg.running,
         latency: msg.latency || state.latency,
         route: { input: msg.input ?? null, output: msg.output ?? null },
+        lastError: null,
       });
       break;
     case 'error': setState({ lastError: msg.msg }); break;
@@ -114,7 +133,6 @@ export function send(cmd) {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(cmd));
 }
 
-// Smooth the meter values once per frame; called by whoever owns the RAF loop.
 export function tickLive() {
   const target = dbTo01(live.outDb);
   const targetIn = dbTo01(live.inDb);
@@ -133,6 +151,8 @@ export const actions = {
   playSound: (id) => send({ cmd: 'play_sound', id }),
   stopSound: () => send({ cmd: 'stop_sound' }),
   playFile: (path) => send({ cmd: 'play_file', path }),
+  measureLatency: () => send({ cmd: 'measure_latency' }),
+  installVirtualMic: () => send({ cmd: 'install_virtual_mic' }),
   updateSettings: (settings) => {
     setState({ settings: { ...state.settings, ...settings } });
     send({ cmd: 'set_audio_settings', settings });

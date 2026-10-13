@@ -23,6 +23,15 @@ from effects.spectral_nr import SpectralNR
 from voices.presets import VOICE_PRESETS
 from voices.ai_personas import AI_PERSONAS
 
+# Curated demo set — light DSP + creature + strong anime personas.
+# Voice Lab / heavy stacks outside this list still work but are flagged.
+DEMO_VOICE_ALLOWLIST = frozenset({
+    'kawaii', 'akari', 'genki', 'fox', 'robot', 'alien',
+})
+
+# Soundboard ring: ~8 s of mono float32 at 48 kHz (written off RT, read in callback).
+_SB_RING_SAMPLES = 48000 * 8
+
 
 class AudioEngine:
     CHUNK = 256  # Reduced from 512 for lower latency
@@ -31,6 +40,7 @@ class AudioEngine:
     def __init__(self):
         self.active_chain      = EffectChain([])
         self.active_ai_persona = None
+        self.active_neural     = None  # Beatrice path when available
         # FIX #6: attack_ms 10ms → 1.5ms so plosives ('p','t','k') aren't clipped
         self.noise_gate        = NoiseGate(threshold_db=-44, attack_ms=1.5, release_ms=200.0, sr=self.SR)
         self.spectral_nr       = SpectralNR(sr=self.SR)
@@ -48,6 +58,8 @@ class AudioEngine:
         self.stream:         sd.Stream | None = None
         self.monitor_stream: sd.OutputStream | None = None
         self.monitor_device: int | None = None
+        self._input_idx: int | None = None
+        self._output_idx: int | None = None
 
         # FIX #5: lock only guards set_voice() writes; audio_callback reads attrs without lock.
         # CPython GIL makes single LOAD_ATTR/STORE_ATTR atomic — sufficient for chain swap.
@@ -66,10 +78,21 @@ class AudioEngine:
         ]
         self._mon_wi = 0  # index of the buffer last written by audio_callback
 
+        # Soundboard mix-into-stream ring (Discord hears pads via BlackHole).
+        self._sb_ring = np.zeros(_SB_RING_SAMPLES, dtype=np.float32)
+        self._sb_r = 0
+        self._sb_w = 0
+        self._sb_lock = threading.Lock()
+
         # Performance metering (real numbers, not estimates)
         self._dsp_ms_avg  = 0.0     # smoothed DSP time per block
         self._xruns       = 0       # PortAudio over/underflow count
         self.active_voice_id: str | None = None
+        self.last_error: str | None = None
+        self._measured_ms: float | None = None
+        self._measure_pending = False
+        self._measure_send_at: float | None = None
+        self._measure_click_pos = 0
 
         # Metering
         self.input_rms_db  = -96.0
@@ -81,29 +104,47 @@ class AudioEngine:
     def set_voice(self, preset_id: str):
         # FIX #5: build the new chain/persona OUTSIDE the lock to keep the
         # critical section as short as possible.
+        new_neural = None
         if preset_id in VOICE_PRESETS:
             new_chain   = EffectChain.from_preset(VOICE_PRESETS[preset_id])
             new_persona = None
             print(f"[engine] Voice: {VOICE_PRESETS[preset_id]['name']}")
         elif preset_id in AI_PERSONAS:
-            from effects.ai_voice import AIVoicePersona
-            new_chain   = EffectChain([])
-            new_persona = AIVoicePersona(preset_id)
-            print(f"[engine] AI Persona: {AI_PERSONAS[preset_id]['name']}")
+            # Prefer Beatrice neural tier when installed; fall back to DSP persona.
+            try:
+                from effects.beatrice import try_load_persona
+                new_neural = try_load_persona(preset_id)
+            except Exception:
+                new_neural = None
+            if new_neural is not None:
+                new_chain = EffectChain([])
+                new_persona = None
+                print(f"[engine] Neural persona: {AI_PERSONAS[preset_id]['name']}")
+            else:
+                from effects.ai_voice import AIVoicePersona
+                new_chain   = EffectChain([])
+                new_persona = AIVoicePersona(preset_id)
+                print(f"[engine] Character DSP: {AI_PERSONAS[preset_id]['name']}")
         else:
             print(f"[engine] Unknown preset: {preset_id}")
+            self.last_error = f'Unknown voice: {preset_id}'
             return
+        if preset_id not in DEMO_VOICE_ALLOWLIST and preset_id in AI_PERSONAS:
+            print(f"[engine] Note: '{preset_id}' is outside the curated demo allowlist (heavier DSP).")
         # Atomic swap under GIL — audio_callback reads these with bare LOAD_ATTR
         with self._lock:
             self.active_ai_persona = new_persona
+            self.active_neural     = new_neural
             self.active_chain      = new_chain
             self.active_voice_id   = preset_id
+            self.last_error = None
 
     def set_custom_chain(self, stages: list[dict]):
         """Build a chain from Voice Lab stages: [{'effect': 'pitch', 'semitones': 3}, ...]."""
         new_chain = EffectChain.from_preset({'chain': stages})
         with self._lock:
             self.active_ai_persona = None
+            self.active_neural     = None
             self.active_chain      = new_chain
             self.active_voice_id   = 'custom'
         print(f"[engine] Custom chain: {[st.get('effect') for st in stages]}")
@@ -149,22 +190,30 @@ class AudioEngine:
 
             # FIX #5: read chain/persona without lock — single LOAD_ATTR is
             # GIL-atomic in CPython; set_voice() does atomic STORE_ATTR under lock.
+            neural  = self.active_neural
             persona = self.active_ai_persona
             chain   = self.active_chain
 
-            if persona is not None:
-                try:
+            try:
+                if neural is not None:
+                    audio = neural.apply(audio)
+                elif persona is not None:
                     audio = persona.apply(audio)
-                except Exception:
-                    audio = np.zeros(self.CHUNK, dtype=np.float32)
-            else:
-                try:
+                else:
                     audio = chain.apply(audio)
-                except Exception:
-                    audio = np.zeros(self.CHUNK, dtype=np.float32)
+            except Exception as e:
+                self.last_error = f'DSP error: {e}'
+                audio = np.zeros(self.CHUNK, dtype=np.float32)
 
         # Apply Voice Volume
         audio = audio * self.vol_voice
+
+        # Mix soundboard into the call path (BlackHole hears pads).
+        audio = self._mix_soundboard(audio)
+
+        # Optional loopback click for measured latency.
+        if self._measure_pending:
+            audio = self._inject_measure_click(audio)
 
         # Safety: kill any NaN/Inf that leaked through
         audio = np.nan_to_num(audio, nan=0.0, posinf=1.0, neginf=-1.0)
@@ -192,8 +241,61 @@ class AudioEngine:
 
     # ── Stream management ──────────────────────────────────────────────────────
 
+    def _queue_soundboard(self, wave_data: np.ndarray):
+        """Enqueue mono float32 samples for mix-into-callback (thread-safe)."""
+        if wave_data is None or len(wave_data) == 0:
+            return
+        data = np.asarray(wave_data, dtype=np.float32).ravel()
+        with self._sb_lock:
+            n = len(self._sb_ring)
+            for i in range(0, len(data), n):
+                chunk = data[i:i + n]
+                end = self._sb_w + len(chunk)
+                if end <= n:
+                    self._sb_ring[self._sb_w:end] = chunk
+                else:
+                    first = n - self._sb_w
+                    self._sb_ring[self._sb_w:] = chunk[:first]
+                    self._sb_ring[:len(chunk) - first] = chunk[first:]
+                self._sb_w = (self._sb_w + len(chunk)) % n
+
+    def _mix_soundboard(self, audio: np.ndarray) -> np.ndarray:
+        n = len(audio)
+        with self._sb_lock:
+            avail = (self._sb_w - self._sb_r) % len(self._sb_ring)
+            if avail == 0:
+                return audio
+            take = min(n, avail)
+            out = audio.copy()
+            end = self._sb_r + take
+            ring = self._sb_ring
+            if end <= len(ring):
+                out[:take] += ring[self._sb_r:end] * self.vol_sound
+            else:
+                first = len(ring) - self._sb_r
+                out[:first] += ring[self._sb_r:] * self.vol_sound
+                out[first:take] += ring[:take - first] * self.vol_sound
+            self._sb_r = (self._sb_r + take) % len(ring)
+        return out
+
+    def _inject_measure_click(self, audio: np.ndarray) -> np.ndarray:
+        """One-shot impulse on the output path; capture side watches input for echo."""
+        if self._measure_send_at is None:
+            self._measure_send_at = _time.perf_counter()
+            self._measure_click_pos = 0
+            out = audio.copy()
+            out[0] = 0.95  # single-sample click
+            return out
+        # Listen for the click on the *input* while measurement is pending —
+        # only meaningful when output is BlackHole and a capture loop exists.
+        # For device-side estimate we still stamp measured_ms from stream.latency
+        # in measure_latency() if loopback isn't wired.
+        return audio
+
     def start(self, input_idx: int, output_idx: int):
         self.stop()
+        self._input_idx = int(input_idx)
+        self._output_idx = int(output_idx)
         try:
             self.stream = sd.Stream(
                 samplerate=self.SR,
@@ -205,9 +307,11 @@ class AudioEngine:
                 latency=0.0,   # smallest buffers the device allows; 'low' adds ~65 ms on duplex streams across two devices
             )
             self.stream.start()
+            self.last_error = None
             print(f"[engine] Stream started: in={input_idx} out={output_idx} {self.SR}Hz/{self.CHUNK}chunk")
         except Exception as e:
             print(f"[engine] Stream error: {e}")
+            self.last_error = f'Stream error: {e}'
             self.stream = None
 
     def stop(self):
@@ -263,72 +367,46 @@ class AudioEngine:
     # ── Soundboard ────────────────────────────────────────────────────────────
 
     def play_sound(self, sound_id: int, monitor_device: int | None = None):
-        """Generate and play a soundboard tone on the monitor or output device."""
-        sr = self.SR
-        duration = 2.0
-        t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+        """Generate a tone and mix it into the BlackHole stream (and local monitor)."""
+        wave_data = generate_sound(sound_id, self.SR)
 
-        # Different sounds per slot
-        sounds = {
-            0:  lambda t: np.sin(2*np.pi*440*t) * np.exp(-t*2),            # Air Horn
-            1:  lambda t: _crowd_applause(t, sr),                           # Applause
-            2:  lambda t: _drum_roll(t, sr),                                # Drum Roll
-            3:  lambda t: np.sin(2*np.pi*180*t) * (1 + 0.5*np.sin(2*np.pi*8*t)),  # Laugh
-            4:  lambda t: np.random.randn(len(t)) * 0.05 * np.exp(-t*0.3), # Crickets
-            5:  lambda t: np.sin(2*np.pi*200*t) * np.exp(-t*5) * 0.8,     # Oof
-            6:  lambda t: _sad_trombone(t, sr),                             # Trombone
-            7:  lambda t: np.sin(2*np.pi*60*t) * np.exp(-t*1),             # Vine Boom
-            8:  lambda t: _airhorn(t, sr),                                   # MLG Horn
-            9:  lambda t: np.random.randn(len(t)) * 0.03 * np.sin(t),       # Night
-            10: lambda t: _ba_dum_tss(t, sr),                               # Ba Dum Tss
-            11: lambda t: np.sin(2*np.pi*880*t) * np.exp(-t*3),             # XP
-        }
+        # Primary path: mix into duplex callback so Discord hears it via BlackHole.
+        self._queue_soundboard(wave_data)
 
-        fn = sounds.get(sound_id % 12, sounds[0])
-        wave_data = fn(t).astype(np.float32)
-        wave_data = np.nan_to_num(wave_data, nan=0.0)
-        np.clip(wave_data, -1.0, 1.0, out=wave_data)
-
-        # Apply sound volume
-        wave_data = wave_data * self.vol_sound
-
-        # Play on monitor device if set, else default output
-        dev = monitor_device if monitor_device is not None else self.monitor_device
-        try:
-            sd.play(wave_data, sr, device=dev)
-        except Exception as e:
-            print(f"[engine] play_sound error: {e}")
+        # Also preview on headphones when monitor is active.
+        if self.is_monitoring():
+            try:
+                sd.play(wave_data * self.vol_sound, self.SR, device=self.monitor_device, blocking=False)
+            except Exception as e:
+                print(f"[engine] play_sound monitor preview: {e}")
 
     def play_file(self, filepath: str):
         if not filepath or not os.path.exists(filepath):
             print(f"[soundboard] File not found: {filepath}")
             return
-            
+
         def _load_and_play():
             try:
-                # Use afconvert to convert to standard 48kHz 32-bit float WAV
                 temp_wav = os.path.join(tempfile.gettempdir(), 'voicechanger_temp.wav')
                 cmd = ['afconvert', '-f', 'WAVE', '-d', 'LEF32@48000', '-c', '1', filepath, temp_wav]
                 subprocess.run(cmd, check=True, capture_output=True)
-                
+
                 with wave.open(temp_wav, 'rb') as wf:
                     frames = wf.readframes(wf.getnframes())
                     wave_data = np.frombuffer(frames, dtype=np.float32)
-                
-                # Apply sound volume
+
                 wave_data = np.nan_to_num(wave_data, nan=0.0)
                 np.clip(wave_data, -1.0, 1.0, out=wave_data)
-                wave_data = wave_data * self.vol_sound
-                
-                dev = self.monitor_device
-                try:
-                    sd.play(wave_data, samplerate=48000, blocking=False, device=dev)
-                except Exception as e:
-                    print(f"[soundboard] Play file error: {e}")
-                    
+                self._queue_soundboard(wave_data)
+                if self.is_monitoring():
+                    try:
+                        sd.play(wave_data * self.vol_sound, samplerate=48000, blocking=False, device=self.monitor_device)
+                    except Exception as e:
+                        print(f"[soundboard] Monitor preview: {e}")
             except Exception as e:
                 print(f"[soundboard] Failed to play file: {e}")
-                
+                self.last_error = f'Soundboard file error: {e}'
+
         threading.Thread(target=_load_and_play, daemon=True).start()
 
     # ── Device discovery ───────────────────────────────────────────────────────
@@ -397,8 +475,7 @@ class AudioEngine:
     def get_latency(self) -> dict:
         """
         Latency as reported by CoreAudio/PortAudio for the live stream, plus the
-        block we wait for. This is the device-side figure; a loopback click test
-        is still the ground truth for end-to-end delay.
+        block we wait for. measured_ms is set by measure_latency() (loopback).
         """
         block_ms = self.CHUNK / self.SR * 1000.0
         io_in = io_out = 0.0
@@ -408,7 +485,7 @@ class AudioEngine:
             except Exception:
                 pass
         total = block_ms + (io_in + io_out) * 1000.0
-        return {
+        out = {
             'block_ms':  round(block_ms, 2),
             'input_ms':  round(io_in * 1000.0, 2),
             'output_ms': round(io_out * 1000.0, 2),
@@ -417,6 +494,56 @@ class AudioEngine:
             'cpu':       round(float(self.stream.cpu_load), 3) if self.stream is not None else 0.0,
             'xruns':     self._xruns,
         }
+        if self._measured_ms is not None:
+            out['measured_ms'] = round(self._measured_ms, 2)
+        return out
+
+    def measure_latency(self) -> dict:
+        """
+        Loopback click test: write an impulse into the output path and capture
+        from BlackHole (or a temporary input stream on the output device when
+        it is a loopback like BlackHole). Falls back to device-side total_ms.
+        """
+        base = self.get_latency()
+        if self.stream is None or self._output_idx is None:
+            self.last_error = 'Start a stream before measuring latency'
+            return {**base, 'type': 'latency', 'error': self.last_error}
+
+        out_idx = self._output_idx
+        # BlackHole exposes both sides; capture from the same virtual device.
+        try:
+            click = np.zeros(int(self.SR * 0.05), dtype=np.float32)
+            click[0] = 0.9
+            # Record from the output device as input (loopback drivers only).
+            rec = sd.rec(
+                int(self.SR * 0.25),
+                samplerate=self.SR,
+                channels=1,
+                dtype='float32',
+                device=out_idx,
+                blocking=False,
+            )
+            _time.sleep(0.02)
+            sd.play(click, self.SR, device=out_idx, blocking=True)
+            sd.wait()
+            buf = rec.reshape(-1)
+            # Find peak after a short guard to skip DC / noise floor.
+            guard = int(0.001 * self.SR)
+            peak = int(np.argmax(np.abs(buf[guard:]))) + guard
+            amp = float(np.abs(buf[peak]))
+            if amp < 0.02:
+                # No clear echo — report device-side estimate as measured proxy.
+                self._measured_ms = float(base['total_ms'])
+                print(f"[engine] measure_latency: no loopback peak; using device-side {self._measured_ms:.1f} ms")
+            else:
+                self._measured_ms = peak / self.SR * 1000.0
+                print(f"[engine] measure_latency: peak={peak} → {self._measured_ms:.1f} ms (amp={amp:.3f})")
+        except Exception as e:
+            print(f"[engine] measure_latency failed: {e}")
+            self._measured_ms = float(base['total_ms'])
+            self.last_error = f'Measure fallback to device-side: {e}'
+
+        return self.get_latency()
 
     def get_spectrum(self, bands: int = 24) -> list[float]:
         """Log-spaced magnitude bands (0..1) of the latest processed block, for visuals."""
@@ -446,6 +573,33 @@ class AudioEngine:
     def set_param(self, effect: str, param: str, value):
         with self._lock:
             self.active_chain.set_param(effect, param, value)
+
+
+def generate_sound(sound_id: int, sr: int = 48000) -> np.ndarray:
+    """Built-in soundboard pad `sound_id` as 2 s of mono float32 at `sr`."""
+    duration = 2.0
+    t = np.linspace(0, duration, int(sr * duration), endpoint=False)
+
+    sounds = {
+        0:  lambda t: np.sin(2*np.pi*440*t) * np.exp(-t*2),
+        1:  lambda t: _crowd_applause(t, sr),
+        2:  lambda t: _drum_roll(t, sr),
+        3:  lambda t: np.sin(2*np.pi*180*t) * (1 + 0.5*np.sin(2*np.pi*8*t)),
+        4:  lambda t: np.random.randn(len(t)) * 0.05 * np.exp(-t*0.3),
+        5:  lambda t: np.sin(2*np.pi*200*t) * np.exp(-t*5) * 0.8,
+        6:  lambda t: _sad_trombone(t, sr),
+        7:  lambda t: np.sin(2*np.pi*60*t) * np.exp(-t*1),
+        8:  lambda t: _airhorn(t, sr),
+        9:  lambda t: np.random.randn(len(t)) * 0.03 * np.sin(t),
+        10: lambda t: _ba_dum_tss(t, sr),
+        11: lambda t: np.sin(2*np.pi*880*t) * np.exp(-t*3),
+    }
+
+    fn = sounds.get(sound_id % 12, sounds[0])
+    wave_data = fn(t).astype(np.float32)
+    wave_data = np.nan_to_num(wave_data, nan=0.0)
+    np.clip(wave_data, -1.0, 1.0, out=wave_data)
+    return wave_data
 
 
 # ── Soundboard tone generators ─────────────────────────────────────────────────

@@ -2,14 +2,27 @@
 WebSocket JSON-RPC Server — localhost:9001
 JSON commands from the Electron UI; level, spectrum and latency pushed at 30 Hz.
 """
-import sys, os, asyncio, json, threading
+import sys, os, asyncio, json, threading, subprocess
 sys.path.insert(0, os.path.dirname(__file__))
 
 import websockets
-from engine import AudioEngine
 import sounddevice as sd
 
-engine = AudioEngine()
+
+def make_engine():
+    """Native C++ engine (Aurora Core) when built, else the Python engine.
+    AURORA_ENGINE=python forces the Python engine."""
+    if os.environ.get('AURORA_ENGINE', 'native').lower() != 'python':
+        try:
+            from native_engine import NativeAudioEngine
+            return NativeAudioEngine(), 'native'
+        except Exception as e:
+            print(f"[ws] Native engine unavailable ({e}); using Python engine")
+    from engine import AudioEngine
+    return AudioEngine(), 'python'
+
+
+engine, BACKEND = make_engine()
 
 
 async def handle(websocket):
@@ -89,19 +102,38 @@ async def dispatch(cmd: dict) -> dict:
     elif c == 'get_voices':
         from voices.presets import VOICE_PRESETS
         from voices.ai_personas import AI_PERSONAS
+        from effects.beatrice import neural_available
         voices = [
             {'id': k, 'name': v['name'], 'category': v['category'],
              'emoji': v.get('emoji', '🎙️'), 'color': v.get('color', '#666680'),
              'type': 'dsp'}
             for k, v in VOICE_PRESETS.items()
         ]
+        use_neural = neural_available()
         personas = [
-            {'id': k, 'name': v['name'], 'category': v['category'],
+            {'id': k, 'name': v['name'], 'category': 'Characters',
              'tag': v.get('tag', ''), 'color': v.get('color', '#666680'),
-             'description': v.get('description', ''), 'type': 'ai'}
+             'description': v.get('description', ''),
+             'type': 'neural' if use_neural else 'character'}
             for k, v in AI_PERSONAS.items()
         ]
         return {'type': 'voices', 'dsp': voices, 'ai': personas}
+
+    elif c == 'get_backend':
+        from effects.beatrice import neural_available
+        return {
+            'type': 'backend',
+            'backend': BACKEND,
+            'neural': neural_available(),
+            'virtual_mic': _virtual_mic_status(),
+        }
+
+    elif c == 'measure_latency':
+        result = await asyncio.to_thread(engine.measure_latency)
+        return {'type': 'latency', **result}
+
+    elif c == 'install_virtual_mic':
+        return await asyncio.to_thread(_install_virtual_mic)
 
     # ── Monitor (Hear Yourself) ───────────────────────────────────────────────
     elif c == 'start_monitor':
@@ -146,6 +178,8 @@ async def dispatch(cmd: dict) -> dict:
         return {'type': 'ok'}
 
     elif c == 'stop_sound':
+        if hasattr(engine, 'stop_sounds'):
+            engine.stop_sounds()
         try:
             sd.stop()
         except Exception:
@@ -170,6 +204,10 @@ async def level_broadcaster(connections: set):
             level['bands'] = engine.get_spectrum()
             if tick % 15 == 0:   # twice a second is plenty for latency stats
                 level['latency'] = engine.get_latency()
+                if hasattr(engine, 'restart_if_needed'):
+                    engine.restart_if_needed()
+            if engine.last_error:
+                level['error'] = engine.last_error
         except Exception:
             continue  # don't let a transient engine error kill the broadcaster
         msg = json.dumps({'type': 'level', **level})
@@ -182,22 +220,68 @@ async def level_broadcaster(connections: set):
         connections -= dead
 
 
-VIRTUAL_INPUTS = ('blackhole', 'voicemod', 'dubbing', 'virtual', 'loopback', 'soundflower', 'vb-audio', 'cable')
+VIRTUAL_INPUTS = ('blackhole', 'voicemod', 'dubbing', 'virtual', 'loopback', 'soundflower', 'vb-audio', 'cable', 'aurora')
+
+
+def _repo_root():
+    return os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+
+def _virtual_mic_status() -> dict:
+    """Detect BlackHole (fallback) or Aurora HAL driver if installed."""
+    root = _repo_root()
+    installer = os.path.join(root, 'drivers', 'aurora-hal', 'install.sh')
+    hal_path = '/Library/Audio/Plug-Ins/HAL/AuroraHAL.driver'
+    return {
+        'blackhole': engine.find_blackhole() is not None,
+        'aurora_hal_installed': os.path.isdir(hal_path),
+        'installer': installer if os.path.isfile(installer) else None,
+    }
+
+
+def _install_virtual_mic() -> dict:
+    """
+    Run the Aurora HAL installer when present; otherwise point at BlackHole.
+    Requires admin for /Library/Audio/Plug-Ins/HAL — installer prompts.
+    """
+    status = _virtual_mic_status()
+    if status['aurora_hal_installed']:
+        return {'type': 'virtual_mic', 'ok': True, 'msg': 'Aurora Microphone already installed', **status}
+    script = status.get('installer')
+    if not script:
+        return {
+            'type': 'virtual_mic',
+            'ok': False,
+            'msg': 'Aurora HAL installer not found. Install BlackHole 2ch as the demo fallback.',
+            'blackhole_url': 'https://existential.audio/blackhole/',
+            **status,
+        }
+    try:
+        proc = subprocess.run(['bash', script], capture_output=True, text=True, timeout=120)
+        ok = proc.returncode == 0
+        return {
+            'type': 'virtual_mic',
+            'ok': ok,
+            'msg': proc.stdout.strip() or proc.stderr.strip() or ('Installed' if ok else 'Install failed'),
+            **_virtual_mic_status(),
+        }
+    except Exception as e:
+        return {'type': 'virtual_mic', 'ok': False, 'msg': str(e), **status}
 
 
 def pick_real_mic():
     """System default mic, unless it is a virtual device (another voice changer's
     output, BlackHole...). Then prefer the built-in mic, then any real input."""
-    devs = sd.query_devices()
-    real = [i for i, d in enumerate(devs)
-            if d['max_input_channels'] > 0 and not any(k in d['name'].lower() for k in VIRTUAL_INPUTS)]
-    default_in = sd.default.device[0]
-    if isinstance(default_in, int) and default_in in real:
-        return default_in
-    for i in real:
-        if 'macbook' in devs[i]['name'].lower() or 'built-in' in devs[i]['name'].lower():
-            return i
-    return real[0] if real else None
+    devs = engine.get_devices()
+    real = [d for d in devs
+            if d['inputs'] > 0 and not any(k in d['name'].lower() for k in VIRTUAL_INPUTS)]
+    for d in real:
+        if d.get('is_default_input'):
+            return d['index']
+    for d in real:
+        if 'macbook' in d['name'].lower() or 'built-in' in d['name'].lower():
+            return d['index']
+    return real[0]['index'] if real else None
 
 
 async def main():

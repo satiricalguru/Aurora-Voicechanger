@@ -1,13 +1,14 @@
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, ExternalLink, Gauge } from 'lucide-react';
 import { actions } from '../lib/engine';
+import { BH_DOWNLOAD, findBlackHole, resetSetupComplete } from '../lib/demo';
 import { RevealLines, FadeUp } from './Reveal';
 import { Slider } from './VoiceLab';
 
-export default function Setup({ engine }) {
+export default function Setup({ engine, demo = true, onOpenSetup }) {
   const { devices, settings: s, route } = engine;
   const inputs = devices.filter(d => d.inputs > 0 && !d.is_blackhole);
   const outputs = devices.filter(d => d.outputs > 0);
-  const bh = devices.find(d => d.is_blackhole && d.outputs > 0);
+  const bh = findBlackHole(devices);
   const defIn = devices.find(d => d.is_default_input && d.inputs > 0);
   const curIn = route.input ?? defIn?.index ?? '';
   const curOut = route.output ?? bh?.index ?? '';
@@ -19,9 +20,13 @@ export default function Setup({ engine }) {
     <section id="setup" className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow">05 · Setup</div>
+          <div className="eyebrow">{demo ? '02 · Setup' : '05 · Setup'}</div>
           <RevealLines className="h-section" lines={['Routing and', <span className="dim" key="d">levels.</span>]} />
-          <FadeUp><p className="lede">Pick “BlackHole 2ch” as the output here, then pick it as the microphone in Discord, Zoom or your game.</p></FadeUp>
+          <FadeUp>
+            <p className="lede">
+              Pick BlackHole 2ch as the output here, then pick it as the microphone in Discord, Zoom or your game.
+            </p>
+          </FadeUp>
         </div>
       </div>
 
@@ -43,8 +48,24 @@ export default function Setup({ engine }) {
               {outputs.map(d => <option key={d.index} value={d.index}>{d.name}{d.is_blackhole ? '  (virtual mic)' : ''}</option>)}
             </select>
           </div>
-          {!bh && <p className="device-warning">BlackHole 2ch isn't installed, so other apps can't hear the changed voice yet.</p>}
-          <button className="btn btn-ghost" onClick={actions.rescan}><RefreshCw size={14} /> Rescan devices</button>
+          {!bh && (
+            <p className="device-warning">
+              BlackHole 2ch isn’t installed.{' '}
+              <a onClick={() => window.electronAPI?.openExternal(BH_DOWNLOAD)}>Get BlackHole</a>
+            </p>
+          )}
+          {bh && (
+            <p className="step-ok" style={{ marginTop: 10 }}>Sending to <b>{bh.name}</b></p>
+          )}
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+            <button className="btn btn-ghost" onClick={actions.rescan}><RefreshCw size={14} /> Rescan devices</button>
+            <button className="btn btn-ghost" onClick={() => { resetSetupComplete(); onOpenSetup?.(); }}>
+              Replay setup
+            </button>
+            <button className="btn btn-ghost" onClick={() => actions.measureLatency()} title="Loopback click test">
+              <Gauge size={14} /> Measure latency
+            </button>
+          </div>
         </div>
 
         <div className="panel">
@@ -53,14 +74,18 @@ export default function Setup({ engine }) {
           <Slider p={{ label: 'Mic gain', min: 0, max: 2, step: 0.01 }} value={s.vol_mic} format={pct} onChange={v => actions.updateSettings({ vol_mic: v })} />
           <Slider p={{ label: 'Voice output', min: 0, max: 2, step: 0.01 }} value={s.vol_voice} format={pct} onChange={v => actions.updateSettings({ vol_voice: v })} />
           <Slider p={{ label: 'Hear myself', min: 0, max: 1.5, step: 0.01 }} value={s.vol_monitor} format={pct} onChange={v => actions.updateSettings({ vol_monitor: v })} />
-          <Slider p={{ label: 'Soundboard', min: 0, max: 1.5, step: 0.01 }} value={s.vol_sound} format={pct} onChange={v => actions.updateSettings({ vol_sound: v })} />
+          {!demo && (
+            <Slider p={{ label: 'Soundboard', min: 0, max: 1.5, step: 0.01 }} value={s.vol_sound} format={pct} onChange={v => actions.updateSettings({ vol_sound: v })} />
+          )}
         </div>
 
         <div className="panel">
           <h3>Clean-up</h3>
           <p className="sub">Keep keyboard clicks and fan noise out of the call.</p>
           <Toggle label="Noise gate" hint="Mutes the mic below the threshold" on={s.noise_gate_enabled} onClick={() => actions.updateSettings({ noise_gate_enabled: !s.noise_gate_enabled })} />
-          <Toggle label="Noise reduction" hint="Learns your room noise while you're quiet" on={s.noise_reduction_enabled} onClick={() => actions.updateSettings({ noise_reduction_enabled: !s.noise_reduction_enabled })} />
+          {!demo && (
+            <Toggle label="Noise reduction" hint="Learns your room noise while you're quiet" on={s.noise_reduction_enabled} onClick={() => actions.updateSettings({ noise_reduction_enabled: !s.noise_reduction_enabled })} />
+          )}
           <div style={{ marginTop: 12 }}>
             <Slider p={{ label: 'Gate threshold', min: -80, max: -10, step: 1 }} value={s.noise_gate_level} format={v => `${v} dB`} onChange={v => actions.updateSettings({ noise_gate_level: v })} />
           </div>
@@ -68,8 +93,14 @@ export default function Setup({ engine }) {
 
         <div className="panel">
           <h3>Latency</h3>
-          <p className="sub">Reported by the audio device for the live stream.</p>
+          <p className="sub">Device-side figures from Core Audio. Measured uses a loopback click when available.</p>
           <LatencyTable lat={engine.latency} />
+          <button className="btn btn-ghost" style={{ marginTop: 12 }} onClick={() => actions.measureLatency()}>
+            <Gauge size={14} /> Run loopback test
+          </button>
+          <p className="note" style={{ marginTop: 14 }}>
+            <ExternalLink size={13} /> Discord / Zoom add their own capture delay on top of these numbers.
+          </p>
         </div>
       </FadeUp>
     </section>
@@ -88,15 +119,16 @@ function Toggle({ label, hint, on, onClick }) {
 function LatencyTable({ lat }) {
   if (!lat) return <div className="empty">No stream running yet.</div>;
   const rows = [
-    ['Input buffer', `${lat.input_ms.toFixed(1)} ms`],
-    ['Processing block', `${lat.block_ms.toFixed(1)} ms`],
-    ['Output buffer', `${lat.output_ms.toFixed(1)} ms`],
-    ['Total (device side)', `${lat.total_ms.toFixed(1)} ms`],
-    ['DSP time per block', `${lat.dsp_ms.toFixed(2)} ms`],
-    ['Dropouts', String(lat.xruns)],
+    ['Input buffer', `${lat.input_ms?.toFixed?.(1) ?? '—'} ms`],
+    ['Processing block', `${lat.block_ms?.toFixed?.(1) ?? '—'} ms`],
+    ['Output buffer', `${lat.output_ms?.toFixed?.(1) ?? '—'} ms`],
+    ['Total (device side)', `${lat.total_ms?.toFixed?.(1) ?? '—'} ms`],
+    ['Measured (loopback)', lat.measured_ms != null ? `${Number(lat.measured_ms).toFixed(1)} ms` : '—'],
+    ['DSP time per block', `${lat.dsp_ms?.toFixed?.(2) ?? '—'} ms`],
+    ['Dropouts', String(lat.xruns ?? 0)],
   ];
   return rows.map(([k, v], i) => (
-    <div className="toggle-row" key={k} style={i === 3 ? { fontWeight: 600 } : undefined}>
+    <div className="toggle-row" key={k} style={i === 3 || i === 4 ? { fontWeight: 600 } : undefined}>
       <span className="l">{k}</span><span style={{ fontFamily: 'var(--mono)', fontSize: 13 }}>{v}</span>
     </div>
   ));
