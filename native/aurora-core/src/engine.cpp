@@ -23,6 +23,11 @@
 #include "graph.h"
 #include "json.h"
 #include "nodes.h"
+#include "denoise.h"
+#ifdef AURORA_NEURAL
+#include "neural/neural_vc.h"
+#include "neural/ort_model.h"
+#endif
 #include "rt.h"
 
 using namespace aurora;
@@ -122,6 +127,15 @@ SideLatency sideLatency(AudioObjectID dev, AudioObjectPropertyScope scope) {
     return l;
 }
 
+// Wireless sources deliver audio in bursts and need jitter slack.
+bool isWireless(AudioObjectID dev) {
+    UInt32 t = 0;
+    getProp(dev, kAudioDevicePropertyTransportType, t);
+    return t == kAudioDeviceTransportTypeBluetooth || t == kAudioDeviceTransportTypeBluetoothLE ||
+           t == kAudioDeviceTransportTypeAirPlay || t == kAudioDeviceTransportTypeContinuityCaptureWireless ||
+           t == kAudioDeviceTransportTypeContinuityCaptureWired;
+}
+
 bool trySetRate(AudioObjectID dev, double want) {
     if (std::fabs(nominalRate(dev) - want) < 1) return true;
     auto a = addr(kAudioDevicePropertyAvailableNominalSampleRates);
@@ -165,10 +179,12 @@ double hostToSeconds(uint64_t t) {
 class DriftReader {
 public:
     FloatRing* ring = nullptr;
-    void prepare(FloatRing* r, double inRate, double outRate, int inBuf, int outBuf) {
+    // jitter: extra frames (input rate) for bursty sources such as Bluetooth.
+    void prepare(FloatRing* r, double inRate, double outRate, int inBuf, int outBuf, double jitter = 0) {
         ring = r;
         ratio0_ = inRate / outRate;
-        minTarget_ = outBuf * ratio0_ + inBuf * 0.5 + 16;
+        growStep_ = std::max(32.0, inBuf * 0.5);
+        minTarget_ = outBuf * ratio0_ + inBuf * 0.5 + 16 + jitter;
         target_ = minTarget_ + 32;
         fillEma_ = target_;
         frac_ = 0;
@@ -178,13 +194,28 @@ public:
         primed_ = false;
         cleanCycles_ = 0;
         cyclesPerSec_ = std::max(1.0, outRate / std::max(1, outBuf));
+        // Devices (Bluetooth especially) stutter while they start: don't
+        // learn from the first 1.5 s.
+        warmup_ = (long)(cyclesPerSec_ * 1.5);
     }
 
     void read(float* out, int n) {
         const double fill = ring->size();
+        const bool warming = warmup_ > 0;
+        if (warming) --warmup_;
+        if (primed_ && fill < 1.0 && fillEma_ < target_ * 0.25) {
+            // Input stopped altogether (device switching profile, stalled
+            // app): one dropout, then wait silently for the queue to refill.
+            primed_ = false;
+            if (!warming) underruns.fetch_add(1, std::memory_order_relaxed);
+        }
         if (!primed_) {
             // Wait until the queue reaches the target, then drop any excess.
-            if (fill < target_) { std::fill(out, out + n, 0.f); return; }
+            if (fill < target_) {
+                for (int i = 0; i < n; ++i) { x2_ *= 0.9f; out[i] = x2_; }  // decay, no click
+                fillEma_ = fill;
+                return;
+            }
             ring->skip((uint32_t)(fill - target_));
             fillEma_ = target_;
             primed_ = true;
@@ -211,11 +242,14 @@ public:
             }
         }
         if (got < need) {
-            underruns.fetch_add(1, std::memory_order_relaxed);
-            target_ = std::min(target_ + 32.0, minTarget_ + 2048.0);
+            if (!warming) {
+                underruns.fetch_add(1, std::memory_order_relaxed);
+                target_ = std::min(target_ + growStep_, minTarget_ + 4096.0);
+            }
             cleanCycles_ = 0;
-        } else if (++cleanCycles_ > cyclesPerSec_ * 10 && target_ > minTarget_) {
-            target_ = std::max(minTarget_, target_ - 8.0);
+        } else if (++cleanCycles_ > cyclesPerSec_ * 5 && target_ > minTarget_) {
+            // 5 s clean: give back a quarter of the slack.
+            target_ = std::max(minTarget_, target_ - std::max(8.0, 0.25 * (target_ - minTarget_)));
             cleanCycles_ = 0;
         }
         fillPublished_.store((float)fillEma_, std::memory_order_relaxed);
@@ -228,11 +262,11 @@ public:
     std::atomic<uint32_t> underruns{0};
 
 private:
-    double ratio0_ = 1, frac_ = 0, target_ = 256, minTarget_ = 200, fillEma_ = 0, cyclesPerSec_ = 375;
+    double ratio0_ = 1, frac_ = 0, target_ = 256, minTarget_ = 200, fillEma_ = 0, cyclesPerSec_ = 375, growStep_ = 32;
     float xm1_ = 0, x0_ = 0, x1_ = 0, x2_ = 0;
     std::vector<float> tmp_;
     bool primed_ = false;
-    long cleanCycles_ = 0;
+    long cleanCycles_ = 0, warmup_ = 0;
     std::atomic<float> fillPublished_{0}, targetPublished_{0}, ratio_{1};
 };
 
@@ -256,7 +290,10 @@ public:
 
     // Settings (written by control, read by audio).
     std::atomic<float> volMic{1}, volVoice{1}, volSound{1}, volMonitor{1}, gateDb{-44};
-    std::atomic<bool> bypass{false}, gateOn{true}, hpfOn{true}, limiterOn{true};
+    std::atomic<bool> bypass{false}, gateOn{true}, hpfOn{true}, limiterOn{true}, mute{false};
+    std::atomic<bool> monitorVoice{true};  // false: monitor device plays soundboard only
+    std::atomic<int> nrMode{0};  // 0 off, 1 low latency, 2 balanced, 3 quality (RNNoise as-is)
+    std::atomic<float> nrStrength{0.85f};
 
     int start(const std::string& inUid, const std::string& outUid, int bufferFrames, double wantRate) {
         stopLocked();
@@ -281,9 +318,12 @@ public:
         prepareDsp();
         outRing_.reset();
         duplex_ = (in == out);
-        if (!duplex_) outReader_.prepare(&outRing_, sr_, outSr_, inBuf_, outBuf_);
+        // Wireless mics deliver audio in bursts: start with ~20 ms of slack.
+        jitter_ = (isWireless(in) || isWireless(out)) ? 0.02 * sr_ : 0.0;
+        if (!duplex_) outReader_.prepare(&outRing_, sr_, outSr_, inBuf_, outBuf_, jitter_);
 
-        // Rebuild the active voice at the new rate.
+        blockHint() = inBuf_;
+        // Rebuild the active voice at the new rate and block size.
         if (!chainJson_.empty()) {
             try {
                 auto c = buildChain(chainJson_, sr_, kMaxBlock);
@@ -301,6 +341,8 @@ public:
         addListeners(in);
         if (!duplex_) addListeners(out);
         inCycles_.store(0);
+        overloads_.store(0);  // counters are per stream
+        dspPeak_.set(0.f);
         deviceChanged_.store(false);
         if ((err = AudioDeviceStart(in, inProc_)) != noErr) { teardown(); return fail("AudioDeviceStart(input) failed: " + std::to_string(err)); }
         if (!duplex_ && (err = AudioDeviceStart(out, outProc_)) != noErr) { teardown(); return fail("AudioDeviceStart(output) failed: " + std::to_string(err)); }
@@ -328,7 +370,8 @@ public:
         monBuf_ = (int)setBufferFrames(dev, (UInt32)std::max(64, inBuf_));
         monChannels_ = channelCount(dev, kAudioObjectPropertyScopeOutput);
         monRing_.reset();
-        monReader_.prepare(&monRing_, sr_, monSr_, inBuf_, monBuf_);
+        monReader_.prepare(&monRing_, sr_, monSr_, inBuf_, monBuf_,
+                           std::max(jitter_, isWireless(dev) ? 0.02 * sr_ : 0.0));
         OSStatus err = AudioDeviceCreateIOProcID(dev, &Engine::monitorProc, this, &monProc_);
         if (err != noErr) return fail("monitor IOProc failed: " + std::to_string(err));
         monDev_ = dev;
@@ -380,7 +423,17 @@ public:
         return params_.push(m) ? 0 : fail("parameter queue full");
     }
 
-    int queueSound(const float* data, int frames, double rate) {
+    // replace: stop whatever is playing first (waits for the audio thread to
+    // drop it, so the new sound is never discarded along with the old one).
+    int queueSound(const float* data, int frames, double rate, bool replace = false) {
+        if (replace) {
+            if (running_.load()) {
+                clearSb_.store(true);
+                for (int i = 0; i < 100 && clearSb_.load(); ++i) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            clearSb_.store(false);  // timed out (stalled device): just append
+            if (!running_.load()) sbRing_.reset();  // no consumer: safe to reset here
+        }
         double sr = sr_ > 0 ? sr_ : 48000;
         double step = rate / sr;
         std::vector<float> tmp;
@@ -415,9 +468,10 @@ private:
     double sr_ = 48000, outSr_ = 48000, monSr_ = 48000;
     int inBuf_ = 128, outBuf_ = 128, monBuf_ = 128, inChannels_ = 1, outChannels_ = 2, monChannels_ = 2;
     bool duplex_ = false;
+    double jitter_ = 0;
     std::atomic<bool> running_{false}, monitoring_{false}, clearSb_{false};
 
-    FloatRing outRing_{1 << 15}, monRing_{1 << 15}, sbRing_{1 << 20};
+    FloatRing outRing_{1 << 15}, monRing_{1 << 15}, sbRing_{1 << 23};  // soundboard: ~175 s at 48 kHz
     DriftReader outReader_, monReader_;
 
     // Voice chain hand-off.
@@ -429,6 +483,7 @@ private:
     SpscQueue<ParamMsg, 256> params_;
 
     nodes::Gate gate_;
+    nodes::Denoise denoise_;
     nodes::Limiter limiter_;
     dsp::Biquad hpf_;
     std::vector<float> work_, fadeTmp_, sbTmp_, outTmp_;
@@ -444,6 +499,11 @@ private:
     // Loopback measurement.
     std::atomic<int> measureState_{0};  // 0 idle, 1 armed, 2 sent, 3 found
     std::atomic<double> measureSentAt_{0}, measureFoundAt_{0};
+    int measureQuiet_ = 0;     // audio thread: samples of silence left before the pulse
+    long detectQuietRun_ = 0;  // output thread: consecutive quiet samples seen
+    int detectWindow_ = 0;     // output thread: samples left to confirm a pulse
+    std::atomic<long> detectMaxQuiet_{0};
+    std::atomic<float> detectPeak_{0.f};
 
     void prepareDsp() {
         work_.assign(16384, 0.f);
@@ -451,6 +511,7 @@ private:
         sbTmp_.assign(kMaxBlock, 0.f);
         outTmp_.assign(16384, 0.f);
         gate_.prepare(sr_);
+        denoise_.prepare(sr_, kMaxBlock);
         limiter_.prepare(sr_);
         hpf_.highpass(sr_, 70.0, 0.7071);
         fadeLen_ = (int)(0.012 * sr_);
@@ -518,6 +579,9 @@ private:
         const float vm = volMic.load(std::memory_order_relaxed);
         for (int i = 0; i < n; ++i) x[i] *= vm;
         if (hpfOn.load(std::memory_order_relaxed)) hpf_.process(x, n);
+        denoise_.mode = nrMode.load(std::memory_order_relaxed);
+        denoise_.strength = nrStrength.load(std::memory_order_relaxed);
+        denoise_.process(x, n);  // Off is a no-op
         if (gateOn.load(std::memory_order_relaxed)) {
             gate_.thresholdDb = gateDb.load(std::memory_order_relaxed);
             gate_.process(x, n);
@@ -545,7 +609,7 @@ private:
             }
         }
 
-        const float vv = volVoice.load(std::memory_order_relaxed);
+        const float vv = mute.load(std::memory_order_relaxed) ? 0.f : volVoice.load(std::memory_order_relaxed);
         for (int i = 0; i < n; ++i) x[i] *= vv;
 
         if (clearSb_.exchange(false)) sbRing_.skip(sbRing_.size());
@@ -556,13 +620,14 @@ private:
         if (limiterOn.load(std::memory_order_relaxed)) limiter_.process(x, n);
         for (int i = 0; i < n; ++i) if (!(x[i] == x[i])) x[i] = 0.f;
 
-        // Loopback measurement: silence the voice, send a 3-sample pulse post-chain.
+        // Loopback measurement: silence the path for 30 ms (so nothing already
+        // queued can be mistaken for the pulse), then send a 3-sample pulse.
         int ms = measureState_.load(std::memory_order_acquire);
         if (ms == 1 || ms == 2) {
             std::fill(x, x + n, 0.f);
-            if (ms == 1 && n >= 3) {
+            if (ms == 1 && n >= 3 && (measureQuiet_ -= n) <= 0) {
                 x[0] = x[1] = x[2] = 0.99f;
-                double chainLat = current_ ? current_->latency() / sr_ : 0.0;
+                double chainLat = ((current_ ? current_->latency() : 0) + denoise_.latency()) / sr_;
                 measureSentAt_.store(inputHostTime - chainLat);
                 measureState_.store(2, std::memory_order_release);
             }
@@ -576,8 +641,12 @@ private:
         scopePos_.store(sp, std::memory_order_relaxed);
 
         if (monitoring_.load(std::memory_order_relaxed)) {
-            const float vmo = volMonitor.load(std::memory_order_relaxed);
-            for (int i = 0; i < n; ++i) outTmp_[i] = x[i] * vmo;
+            if (monitorVoice.load(std::memory_order_relaxed)) {  // hear myself: voice + sounds
+                const float vmo = volMonitor.load(std::memory_order_relaxed);
+                for (int i = 0; i < n; ++i) outTmp_[i] = x[i] * vmo;
+            } else {  // sounds-only preview: pads in your headphones, not your voice
+                for (int i = 0; i < n; ++i) outTmp_[i] = i < got ? sbTmp_[i] * vs : 0.f;
+            }
             monRing_.push(outTmp_.data(), (uint32_t)n);
         }
     }
@@ -626,19 +695,34 @@ private:
     }
 
     void detectPulse(const AudioBufferList* in, const AudioTimeStamp* inTime, double rate) {
-        if (measureState_.load(std::memory_order_acquire) != 2 || !in) return;
+        // Count quiet from arming (state 1) on; accept the pulse only once sent (2).
+        const int state = measureState_.load(std::memory_order_acquire);
+        if ((state != 1 && state != 2) || !in) return;
         for (UInt32 i = 0; i < in->mNumberBuffers; ++i) {
             const AudioBuffer& b = in->mBuffers[i];
             if (!b.mData || b.mNumberChannels == 0) continue;
             const float* s = static_cast<const float*>(b.mData);
             const int ch = (int)b.mNumberChannels, fr = (int)(b.mDataByteSize / (sizeof(float) * ch));
+            const long needQuiet = (long)(0.01 * rate);
             for (int f = 0; f < fr; ++f) {
-                if (std::fabs(s[f * ch]) > 0.6f) {
-                    double t = hostToSeconds(inTime->mHostTime) + f / rate;
-                    measureFoundAt_.store(t);
-                    measureState_.store(3, std::memory_order_release);
-                    return;
+                float a = std::fabs(s[f * ch]);
+                if (state == 2 && a > detectPeak_.load(std::memory_order_relaxed)) detectPeak_.store(a, std::memory_order_relaxed);
+                // A pulse is the first sound after >= 10 ms of quiet that reaches
+                // full height within 16 samples (resampling can ramp its edge).
+                if (state == 2 && a >= 0.05f && detectQuietRun_ >= needQuiet) detectWindow_ = 16;
+                if (detectWindow_ > 0) {
+                    if (a > 0.6f) {
+                        double t = hostToSeconds(inTime->mHostTime) + f / rate;
+                        measureFoundAt_.store(t);
+                        measureState_.store(3, std::memory_order_release);
+                        detectWindow_ = 0;
+                        return;
+                    }
+                    --detectWindow_;
                 }
+                detectQuietRun_ = a < 0.05f ? detectQuietRun_ + 1 : 0;
+                if (detectQuietRun_ > detectMaxQuiet_.load(std::memory_order_relaxed))
+                    detectMaxQuiet_.store(detectQuietRun_, std::memory_order_relaxed);
             }
             return;
         }
@@ -724,6 +808,7 @@ std::string Engine::statsJson() {
         lo = sideLatency(outDev_, kAudioObjectPropertyScopeOutput);
     }
     int chainLat = current_ ? current_->latency() : 0;
+    const double nrMs = denoise_.latency() * 1000.0 / sr_;
     double queued = duplex_ ? 0.0 : outReader_.queued();
     double inMs = li.total() * ms;
     double outMs = lo.total() * 1000.0 / outSr_;
@@ -735,7 +820,8 @@ std::string Engine::statsJson() {
     w.kv("dsp_ms", dspMs, 2);
     w.kv("ring_ms", ringMs, 2);
     w.kv("output_ms", outMs, 2);
-    w.kv("total_ms", inMs + dspMs + ringMs + outMs, 2);
+    w.kv("nr_ms", nrMs, 2);
+    w.kv("total_ms", inMs + nrMs + dspMs + ringMs + outMs, 2);
     w.kv("block_ms", inBuf_ * ms, 2);
     w.kv("ring_target_ms", (duplex_ ? 0.0 : outReader_.target()) * ms, 2);
     w.kv("drift_ratio", duplex_ ? 1.0 : outReader_.ratio(), 6);
@@ -745,10 +831,17 @@ std::string Engine::statsJson() {
     w.beginObj(); w.kvi("device", lo.device); w.kvi("safety", lo.safety); w.kvi("stream", lo.stream); w.kvi("buffer", lo.buffer); w.endObj();
     w.endObj();
 
+    w.kv("voice_activity", denoise_.vad(), 3);
+    w.kv("sound_remaining_ms", sbRing_.size() * 1000.0 / sr_, 0);
+    w.kvb("muted", mute.load());
     w.kv("cpu", dspLoad_.get(), 3);
     w.kv("cpu_peak", dspPeak_.get(), 3);
     w.kv("dsp_time_ms", dspMs_.get(), 3);
-    w.kvi("xruns", (long long)outReader_.underruns.load() + monReader_.underruns.load() + overloads_.load());
+    const uint32_t modelDrops = current_ ? current_->dropouts() : 0;
+    w.kvi("xruns", (long long)outReader_.underruns.load() + monReader_.underruns.load() + overloads_.load() + modelDrops);
+    w.kvi("model_underruns", modelDrops);
+    w.kv("model_step_ms", current_ ? current_->workerStepMs() : 0.0, 3);
+    w.kv("model_cpu", current_ ? current_->workerLoad() : 0.0, 3);
     w.kvi("underruns", outReader_.underruns.load());
     w.kvi("overloads", overloads_.load());
     w.kvi("cycles", (long long)inCycles_.load());
@@ -790,11 +883,17 @@ std::string Engine::measureLoopback() {
         fail("output device has no input side to listen on (needs a loopback device like BlackHole)");
         return statsJson();
     }
+    measureQuiet_ = (int)(0.03 * sr_);
+    detectQuietRun_ = 0;
+    detectWindow_ = 0;
+    detectMaxQuiet_.store(0);
+    detectPeak_.store(0.f);
     measureState_.store(1, std::memory_order_release);
     auto t0 = std::chrono::steady_clock::now();
     while (measureState_.load() != 3 && std::chrono::steady_clock::now() - t0 < std::chrono::milliseconds(1000))
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-    bool ok = measureState_.load() == 3;
+    const int reached = measureState_.load();
+    bool ok = reached == 3;
     double loopMs = ok ? (measureFoundAt_.load() - measureSentAt_.load()) * 1000.0 : 0.0;
     measureState_.store(0, std::memory_order_release);
 
@@ -811,6 +910,9 @@ std::string Engine::measureLoopback() {
     w.kv("measured_ms", ok ? loopMs + converterMs : 0.0, 2);
     w.kv("measured_path_ms", loopMs, 2);
     w.kv("input_converter_ms", converterMs, 2);
+    w.kvi("state_reached", reached);
+    w.kvi("max_quiet_samples", detectMaxQuiet_.load());
+    w.kv("peak_after_send", detectPeak_.load(), 3);
     w.key("stats");
     w.raw(base);
     w.endObj();
@@ -926,10 +1028,14 @@ int ac_set_setting(const char* key, double v) {
     else if (k == "vol_sound") e.volSound.store((float)v);
     else if (k == "vol_monitor") e.volMonitor.store((float)v);
     else if (k == "bypass") e.bypass.store(v != 0);
+    else if (k == "mute") e.mute.store(v != 0);
+    else if (k == "monitor_voice") e.monitorVoice.store(v != 0);
     else if (k == "gate_enabled") e.gateOn.store(v != 0);
     else if (k == "gate_db") e.gateDb.store((float)v);
     else if (k == "hpf_enabled") e.hpfOn.store(v != 0);
     else if (k == "limiter_enabled") e.limiterOn.store(v != 0);
+    else if (k == "nr_mode") e.nrMode.store(std::clamp((int)v, 0, 3));
+    else if (k == "nr_strength") e.nrStrength.store((float)std::clamp(v, 0.0, 1.0));
     else {
         std::lock_guard<std::mutex> g(e.ctl);
         return e.fail("unknown setting: " + k);
@@ -942,6 +1048,13 @@ int ac_queue_sound(const float* data, int frames, double sample_rate) {
     auto& e = Engine::get();
     std::lock_guard<std::mutex> g(e.ctl);
     return e.queueSound(data, frames, sample_rate);
+}
+
+int ac_play_sound(const float* data, int frames, double sample_rate) {
+    if (!data || frames < 2 || sample_rate <= 0) return -1;
+    auto& e = Engine::get();
+    std::lock_guard<std::mutex> g(e.ctl);
+    return e.queueSound(data, frames, sample_rate, true);
 }
 
 void ac_clear_sounds(void) { Engine::get().clearSounds(); }
@@ -962,9 +1075,19 @@ int ac_render_offline(const char* chain_json, const float* input, float* output,
     if (!input || !output || frames <= 0 || sr <= 0) return -1;
     if (block <= 0) block = 128;
     std::unique_ptr<Chain> c;
+#ifdef AURORA_NEURAL
+    struct OfflineScope {
+        OfflineScope() { neural::offlineMode() = true; }
+        ~OfflineScope() { neural::offlineMode() = false; }
+    } offline;
+#endif
+    const int savedHint = blockHint();
+    blockHint() = std::max(block, 16);
     try {
         c = buildChain(chain_json ? chain_json : "{}", sr, std::max(block, 16));
+        blockHint() = savedHint;
     } catch (const std::string& err) {
+        blockHint() = savedHint;
         auto& e = Engine::get();
         std::lock_guard<std::mutex> g(e.ctl);
         e.fail(err);

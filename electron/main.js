@@ -160,6 +160,7 @@ function buildMenu() {
       submenu: [
         { label: 'Toggle voice on/off', accelerator: 'F1', click: () => send({ cmd: 'toggle_bypass' }) },
         { label: 'Toggle hear myself', accelerator: 'F2', click: () => send({ cmd: 'toggle_monitor' }) },
+        { label: 'Mute microphone', accelerator: 'F3', click: () => send({ cmd: 'toggle_mute' }) },
       ],
     },
     {
@@ -183,6 +184,7 @@ function setupTray() {
     { label: 'Show Aurora Voice', click: () => mainWindow?.show() },
     { type: 'separator' },
     { label: 'Toggle voice on/off', click: () => send({ cmd: 'toggle_bypass' }) },
+    { label: 'Mute microphone', click: () => send({ cmd: 'toggle_mute' }) },
     { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]));
@@ -191,14 +193,40 @@ function setupTray() {
 
 // ── Global hotkeys ────────────────────────────────────────────────────────────
 
+const BASE_HOTKEYS = {
+  F1: () => send({ cmd: 'toggle_bypass' }),
+  F2: () => send({ cmd: 'toggle_monitor' }),
+  F3: () => send({ cmd: 'toggle_mute' }),
+  F4: () => (mainWindow?.isVisible() ? mainWindow.hide() : mainWindow?.show()),
+};
+let soundHotkeys = [];
+
 function registerHotkeys() {
-  try {
-    globalShortcut.register('F1', () => send({ cmd: 'toggle_bypass' }));
-    globalShortcut.register('F4', () => (mainWindow?.isVisible() ? mainWindow.hide() : mainWindow?.show()));
-  } catch (e) {
-    console.warn('[hotkeys] Registration failed:', e.message);
+  for (const [key, fn] of Object.entries(BASE_HOTKEYS)) {
+    try {
+      if (!globalShortcut.register(key, fn)) console.warn(`[hotkeys] ${key} is taken by another app`);
+    } catch (e) {
+      console.warn(`[hotkeys] ${key}:`, e.message);
+    }
   }
 }
+
+// Soundboard keybinds work while Aurora is in the background, like Voicemod's.
+ipcMain.handle('set-sound-hotkeys', (_, list) => {
+  soundHotkeys.forEach((acc) => { try { globalShortcut.unregister(acc); } catch { /* ignore */ } });
+  soundHotkeys = [];
+  const failed = [];
+  for (const { accelerator, id } of Array.isArray(list) ? list : []) {
+    if (!accelerator || BASE_HOTKEYS[accelerator] || typeof id !== 'string') { failed.push(accelerator); continue; }
+    try {
+      if (globalShortcut.register(accelerator, () => send({ cmd: 'play_sound', id }))) soundHotkeys.push(accelerator);
+      else failed.push(accelerator);
+    } catch {
+      failed.push(accelerator);
+    }
+  }
+  return { registered: soundHotkeys, failed };
+});
 
 // ── Lifecycle ─────────────────────────────────────────────────────────────────
 

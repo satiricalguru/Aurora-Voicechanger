@@ -2,26 +2,26 @@ import { useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Check, ExternalLink, Mic, Radio, RefreshCw, Headphones } from 'lucide-react';
 import { actions } from '../lib/engine';
-import { BH_DOWNLOAD, findBlackHole, markSetupComplete, pickRealMic } from '../lib/demo';
+import { BH_DOWNLOAD, findVirtualMic, markSetupComplete, pickRealMic } from '../lib/demo';
 
 /**
- * Blocks free scroll until mic + BlackHole are confirmed.
+ * Blocks free scroll until mic + virtual mic are confirmed.
  * Mirrors Voicemod's first-run routing: mic in → virtual out → pick virtual in Discord.
  */
 export default function FirstRunSheet({ engine, onDone }) {
   const { devices, route, connected } = engine;
   const inputs = useMemo(
-    () => devices.filter(d => d.inputs > 0 && !d.is_blackhole),
+    () => devices.filter(d => d.inputs > 0 && !d.is_virtual_mic),
     [devices],
   );
-  const bh = findBlackHole(devices);
+  const vm = findVirtualMic(devices);
   const suggestedMic = pickRealMic(devices);
   const [mic, setMic] = useState(() => route.input ?? suggestedMic?.index ?? '');
   const [ackApps, setAckApps] = useState(false);
 
   // Keep mic select in sync when devices first arrive.
   const micValue = mic !== '' ? mic : (suggestedMic?.index ?? '');
-  const canFinish = connected && micValue !== '' && !!bh && ackApps;
+  const canFinish = connected && micValue !== '' && !!vm && ackApps;
 
   const applyRoute = (inp, out) => {
     if (inp === '' || out == null) return;
@@ -30,12 +30,12 @@ export default function FirstRunSheet({ engine, onDone }) {
 
   const onMicChange = (v) => {
     setMic(v);
-    if (bh) applyRoute(v, bh.index);
+    if (vm) applyRoute(v, vm.index);
   };
 
   const finish = () => {
     if (!canFinish) return;
-    applyRoute(micValue, bh.index);
+    applyRoute(micValue, vm.index);
     markSetupComplete();
     onDone?.();
   };
@@ -63,7 +63,7 @@ export default function FirstRunSheet({ engine, onDone }) {
           Route your voice so Discord hears it.
         </h2>
         <p className="lede" style={{ marginTop: 8, maxWidth: 'none' }}>
-          Speak into your mic. Aurora transforms it and sends it to BlackHole. Pick BlackHole as the microphone in Discord, Zoom or your game.
+          Speak into your mic. Aurora transforms it and sends it to Aurora Microphone. Pick Aurora Microphone as the microphone in Discord, Zoom or your game.
         </p>
 
         <ol className="sheet-steps">
@@ -85,26 +85,26 @@ export default function FirstRunSheet({ engine, onDone }) {
             </div>
           </li>
 
-          <li className={bh ? 'done' : ''}>
+          <li className={vm ? 'done' : ''}>
             <span className="step-ico"><Radio size={16} /></span>
             <div className="step-body">
-              <strong>2. Virtual mic (BlackHole 2ch)</strong>
-              {bh ? (
-                <p className="step-ok"><Check size={14} /> Sending changed voice to <b>{bh.name}</b></p>
+              <strong>2. Virtual mic (Aurora Microphone)</strong>
+              {vm ? (
+                <p className="step-ok"><Check size={14} /> Sending changed voice to <b>{vm.name}</b></p>
               ) : (
                 <p className="device-warning" style={{ margin: '8px 0 0' }}>
-                  BlackHole isn’t installed yet.{' '}
-                  <a onClick={openBh}>Get BlackHole <ExternalLink size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /></a>
-                  {' '}then Rescan.
+                  Not installed yet. Install Aurora Microphone (asks for your Mac password once), or{' '}
+                  <a onClick={openBh}>use BlackHole <ExternalLink size={12} style={{ display: 'inline', verticalAlign: '-1px' }} /></a>
+                  {' '}and Rescan.
                 </p>
               )}
               <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                 <button className="btn btn-ghost" type="button" onClick={() => { actions.rescan(); }}>
                   <RefreshCw size={14} /> Rescan devices
                 </button>
-                {!bh && (
-                  <button className="btn btn-ghost" type="button" onClick={openBh}>
-                    <ExternalLink size={14} /> Install BlackHole
+                {!vm && (
+                  <button className="btn btn-primary" type="button" onClick={actions.installVirtualMic}>
+                    <Radio size={14} /> Install Aurora Microphone
                   </button>
                 )}
               </div>
@@ -116,11 +116,11 @@ export default function FirstRunSheet({ engine, onDone }) {
             <div className="step-body">
               <strong>3. In Discord / Zoom / game</strong>
               <p className="sub" style={{ marginTop: 6 }}>
-                Set the input (microphone) to <b>BlackHole 2ch</b>. Keep headphones as your speaker — never set BlackHole as the speaker.
+                Set the input (microphone) to <b>{vm?.name || 'Aurora Microphone'}</b>. Keep headphones as your speaker.
               </p>
               <label className="sheet-check">
                 <input type="checkbox" checked={ackApps} onChange={e => setAckApps(e.target.checked)} />
-                I’ve set BlackHole as the mic in my call app
+                I’ve set {vm?.name || 'Aurora Microphone'} as the mic in my call app
               </label>
             </div>
           </li>

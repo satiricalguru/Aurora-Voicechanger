@@ -11,3 +11,4 @@ voicemod/
 *.dec.ogg
 .vercel/
 native/aurora-core/build/
+drivers/aurora-hal/build/

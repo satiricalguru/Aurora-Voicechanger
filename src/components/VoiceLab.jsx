@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence, Reorder } from 'framer-motion';
-import { Plus, X, GripVertical, Play } from 'lucide-react';
+import { Plus, X, GripVertical, Play, Save, Trash2 } from 'lucide-react';
 import { actions, useEngine } from '../lib/engine';
 import { RevealLines, FadeUp } from './Reveal';
 
@@ -35,7 +35,19 @@ const FX = [
     { key: 'depth', label: 'Depth', min: 0, max: 1, step: 0.01, def: 0.7 } ] },
   { id: 'harmony', name: 'Harmony', params: [
     { key: 'wet', label: 'Wet', min: 0, max: 1, step: 0.01, def: 0.4 } ] },
+  { id: 'whisper', name: 'Whisper', params: [
+    { key: 'breathiness', label: 'Breath', min: 0, max: 1, step: 0.01, def: 0.7 } ] },
+  { id: 'vibrato', name: 'Vibrato', params: [
+    { key: 'rate', label: 'Rate Hz', min: 0.5, max: 10, step: 0.1, def: 5 },
+    { key: 'depth', label: 'Depth', min: 0, max: 2, step: 0.01, def: 0.3 } ] },
+  { id: 'autotune', name: 'Autotune', params: [
+    { key: 'speed', label: 'Snap', min: 0, max: 1, step: 0.01, def: 0.05 } ] },
+  { id: 'noise_inject', name: 'Radio noise', params: [
+    { key: 'level', label: 'Level', min: 0, max: 0.2, step: 0.005, def: 0.03 } ] },
 ];
+const SAVED_KEY = 'aurora.lab.saved.v1';
+const loadSaved = () => { try { return JSON.parse(localStorage.getItem(SAVED_KEY) || '[]'); } catch { return []; } };
+const storeSaved = (list) => { try { localStorage.setItem(SAVED_KEY, JSON.stringify(list)); } catch { /* private mode */ } };
 const byId = Object.fromEntries(FX.map(f => [f.id, f]));
 
 const toStages = (chain) => chain.map(n => ({ effect: n.fx, ...n.params }));
@@ -43,7 +55,17 @@ const toStages = (chain) => chain.map(n => ({ effect: n.fx, ...n.params }));
 export default function VoiceLab() {
   const engine = useEngine();
   const [chain, setChain] = useState([]);
+  const [saved, setSaved] = useState(loadSaved);
+  const [name, setName] = useState('');
   const live = engine.activeVoice === 'custom';
+
+  const save = () => {
+    const n = name.trim() || `My voice ${saved.length + 1}`;
+    const next = [...saved.filter(v => v.name !== n), { name: n, chain: chain.map(({ fx, params }) => ({ fx, params })) }];
+    setSaved(next); storeSaved(next); setName('');
+  };
+  const load = (v) => commit(v.chain.map((n, i) => ({ ...n, key: `${n.fx}-${Date.now()}-${i}` })));
+  const forget = (n) => { const next = saved.filter(v => v.name !== n); setSaved(next); storeSaved(next); };
 
   function commit(next) {
     setChain(next);
@@ -63,7 +85,7 @@ export default function VoiceLab() {
     <section id="lab" className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow">04 · Voice Lab</div>
+          <div className="eyebrow">03 · Voice Lab</div>
           <RevealLines className="h-section" lines={['Build your', <span className="dim" key="d">own voice.</span>]} />
           <FadeUp><p className="lede">Stack effects in any order. Changes go live as you drag.</p></FadeUp>
         </div>
@@ -83,12 +105,32 @@ export default function VoiceLab() {
               <button key={f.id} onClick={() => add(f.id)}>{f.name}<Plus size={14} /></button>
             ))}
           </div>
+          {saved.length > 0 && (
+            <>
+              <h3 style={{ marginTop: 24 }}>Saved voices</h3>
+              <p className="sub">Load one to keep editing it</p>
+              <div className="saved-list">
+                {saved.map(v => (
+                  <div key={v.name} className="saved-item">
+                    <button onClick={() => load(v)}>{v.name}<small>{v.chain.length} fx</small></button>
+                    <button className="icon-btn" onClick={() => forget(v.name)} aria-label={`Delete ${v.name}`}><Trash2 size={13} /></button>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
 
         <div className="panel">
           <h3>Chain</h3>
           <p className="sub">{chain.length ? `${chain.length} effect${chain.length > 1 ? 's' : ''}, top to bottom. Drag to reorder.` : 'Your voice runs through these in order.'}</p>
           {!chain.length && <div className="empty">Add an effect to start. Try Pitch, then Reverb.</div>}
+          {chain.length > 0 && (
+            <div className="lab-save">
+              <input className="input" value={name} maxLength={32} placeholder="Name this voice" onChange={e => setName(e.target.value)} onKeyDown={e => e.key === 'Enter' && save()} aria-label="Voice name" />
+              <button className="btn btn-ghost" onClick={save}><Save size={14} /> Save</button>
+            </div>
+          )}
           <Reorder.Group axis="y" values={chain} onReorder={commit} className="chain" as="div">
             <AnimatePresence initial={false}>
               {chain.map((n, i) => (

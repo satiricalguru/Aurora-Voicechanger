@@ -30,7 +30,7 @@ DEMO_VOICE_ALLOWLIST = frozenset({
 })
 
 # Soundboard ring: ~8 s of mono float32 at 48 kHz (written off RT, read in callback).
-_SB_RING_SAMPLES = 48000 * 8
+_SB_RING_SAMPLES = 48000 * 130  # soundboard clips are capped at 120 s
 
 
 class AudioEngine:
@@ -45,6 +45,8 @@ class AudioEngine:
         self.noise_gate        = NoiseGate(threshold_db=-44, attack_ms=1.5, release_ms=200.0, sr=self.SR)
         self.spectral_nr       = SpectralNR(sr=self.SR)
         self.bypass            = False
+        self.muted             = False
+        self.library           = None   # SoundLibrary, attached by ws_server
 
         # Audio Settings
         self.vol_mic     = 1.0
@@ -206,7 +208,7 @@ class AudioEngine:
                 audio = np.zeros(self.CHUNK, dtype=np.float32)
 
         # Apply Voice Volume
-        audio = audio * self.vol_voice
+        audio = audio * (0.0 if self.muted else self.vol_voice)
 
         # Mix soundboard into the call path (BlackHole hears pads).
         audio = self._mix_soundboard(audio)
@@ -366,9 +368,21 @@ class AudioEngine:
 
     # ── Soundboard ────────────────────────────────────────────────────────────
 
-    def play_sound(self, sound_id: int, monitor_device: int | None = None):
-        """Generate a tone and mix it into the BlackHole stream (and local monitor)."""
-        wave_data = generate_sound(sound_id, self.SR)
+    def set_mute(self, value: bool):
+        self.muted = bool(value)
+
+    def stop_sounds(self):
+        with self._sb_lock:
+            self._sb_r = self._sb_w
+
+    def play_sound(self, sound_id, monitor_device: int | None = None):
+        """Mix a soundboard sound into the call path (and play it on the monitor)."""
+        from soundlib import resolve_id
+        sid = resolve_id(sound_id)
+        wave_data = self.library.audio(sid) if self.library else None
+        if wave_data is None:
+            wave_data = generate_sound(int(sound_id) if str(sound_id).isdigit() else 0, self.SR)
+        self.stop_sounds()
 
         # Primary path: mix into duplex callback so Discord hears it via BlackHole.
         self._queue_soundboard(wave_data)
@@ -421,26 +435,31 @@ class AudioEngine:
                 'inputs':  d['max_input_channels'],
                 'outputs': d['max_output_channels'],
                 'is_blackhole':    'BlackHole' in d['name'],
+                'is_aurora':       d['name'] == 'Aurora Microphone',
+                'is_virtual_mic':  'BlackHole' in d['name'] or d['name'] == 'Aurora Microphone',
                 'is_default_input':  i == sd.default.device[0],
                 'is_default_output': i == sd.default.device[1],
                 'sample_rate': int(d['default_samplerate']),
             })
         return result
 
-    def find_blackhole(self) -> int | None:
-        for d in self.get_devices():
-            if d['is_blackhole'] and d['outputs'] > 0:
-                return d['index']
+    def find_virtual_mic(self) -> int | None:
+        """Output that feeds the virtual mic: Aurora Microphone, else BlackHole."""
+        devs = [d for d in self.get_devices() if d['outputs'] > 0]
+        for key in ('is_aurora', 'is_blackhole'):
+            for d in devs:
+                if d[key]:
+                    return d['index']
         return None
 
     def find_default_output(self) -> int | None:
         """Return a speaker/headphone output (not BlackHole) for monitoring."""
         for d in self.get_devices():
-            if d['outputs'] > 0 and not d['is_blackhole']:
+            if d['outputs'] > 0 and not d['is_virtual_mic']:
                 if d['is_default_output']:
                     return d['index']
         for d in self.get_devices():
-            if d['outputs'] > 0 and not d['is_blackhole']:
+            if d['outputs'] > 0 and not d['is_virtual_mic']:
                 return d['index']
         return None
 
@@ -567,6 +586,7 @@ class AudioEngine:
             'running':       self.is_running(),
             'monitoring':    self.is_monitoring(),
             'bypass':        self.bypass,
+            'muted':         self.muted,
             'voice':         self.active_voice_id,
         }
 

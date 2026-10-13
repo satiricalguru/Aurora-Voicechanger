@@ -1,18 +1,19 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Power, Headphones } from 'lucide-react';
+import { Power, Headphones, Mic, MicOff } from 'lucide-react';
 import { actions, live } from '../lib/engine';
-import { findBlackHole } from '../lib/demo';
+import { findVirtualMic } from '../lib/demo';
 import Avatar from './Avatar';
 
 function statusLabel(engine) {
   if (!engine.connected) return { text: 'STARTING…', hint: 'Engine offline' };
   if (!engine.running) {
-    const bh = findBlackHole(engine.devices);
-    return bh
+    const vm = findVirtualMic(engine.devices);
+    return vm
       ? { text: 'READY', hint: 'Tap On to go live' }
-      : { text: 'CHOOSE OUTPUT', hint: 'Finish Setup — need BlackHole' };
+      : { text: 'CHOOSE OUTPUT', hint: 'Finish Setup — need a virtual mic' };
   }
+  if (engine.muted) return { text: 'MUTED', hint: 'Mic muted (F3)' };
   if (engine.bypass) return { text: 'VOICE OFF', hint: 'Bypassed' };
   return { text: 'LIVE', hint: 'Others hear this character' };
 }
@@ -45,7 +46,7 @@ export default function Dock({ engine, voice, onOpenSetup }) {
   const lat = latencyLabel(engine.latency);
   const hot = engine.latency && (engine.latency.dsp_ms > 3 || engine.latency.xruns > 0);
   const clickStatus = () => {
-    if (!engine.connected || !engine.running || !findBlackHole(engine.devices)) onOpenSetup?.();
+    if (!engine.connected || !engine.running || !findVirtualMic(engine.devices)) onOpenSetup?.();
   };
 
   return (
@@ -59,15 +60,18 @@ export default function Dock({ engine, voice, onOpenSetup }) {
       </div>
       <div className="meter">IN<div className="track"><div className="fill" ref={inRef} /></div></div>
       <div className="meter">OUT<div className="track"><div className="fill" ref={outRef} /></div></div>
-      <div className={`latency ${hot ? 'hot' : ''}`} title={hot ? `DSP ${engine.latency.dsp_ms.toFixed(2)} ms · ${engine.latency.xruns} dropouts` : `${lat.caption} latency`}>
-        <b>{lat.value}</b> {lat.unit}
+      <div className={`latency ${hot ? 'hot' : ''}`} title={hot ? `DSP ${engine.latency.dsp_ms.toFixed(2)} ms · ${engine.latency.xruns} dropouts` : `${lat.caption} end-to-end latency`}>
+        <span className="v"><b>{lat.value}</b> {lat.unit}</span>
         <small>{lat.caption}</small>
       </div>
+      <button className={`btn btn-ghost ${engine.muted ? 'on danger' : ''}`} onClick={actions.toggleMute} aria-label={engine.muted ? 'Unmute microphone' : 'Mute microphone'} aria-pressed={engine.muted} title="Mute (F3)">
+        {engine.muted ? <MicOff size={15} /> : <Mic size={15} />}
+      </button>
       <button className={`btn btn-ghost ${engine.monitoring ? 'on' : ''}`} onClick={() => actions.toggleMonitor()} aria-label="Hear myself" title="Hear myself (F2)">
         <Headphones size={15} />
       </button>
-      <button className="btn btn-primary" onClick={actions.toggleBypass} title="Voice on/off (F1)">
-        <Power size={15} /> {engine.bypass ? 'Off' : 'On'}
+      <button className={`btn ${engine.bypass ? 'btn-ghost' : 'btn-primary'}`} onClick={actions.toggleBypass} title="Voice changer on/off (F1)" aria-pressed={!engine.bypass}>
+        <Power size={15} /> {engine.bypass ? 'Voice off' : 'Voice on'}
       </button>
     </motion.div>
   );

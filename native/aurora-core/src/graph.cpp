@@ -1,6 +1,10 @@
 #include "graph.h"
 
 #include "nodes.h"
+#include "denoise.h"
+#ifdef AURORA_NEURAL
+#include "neural/neural_vc.h"
+#endif
 
 namespace aurora {
 
@@ -126,6 +130,25 @@ std::unique_ptr<Node> makeNode(const Value& s) {
         n->type = fx;
         return n;
     }
+    if (fx == "denoise") {
+        auto n = std::make_unique<nodes::Denoise>();
+        n->mode = std::clamp((int)s.number("mode", 2), 0, 3);
+        n->strength = (float)std::clamp(s.number("strength", 0.85), 0.0, 1.0);
+        n->release = (float)std::clamp(s.number("release", 0.7), 0.01, 1.0);
+        n->instances = (int)s.number("instances", 2);
+        n->alignMs = (float)std::clamp(s.number("align_ms", -1), -1.0, 40.0);
+        n->type = fx;
+        return n;
+    }
+#ifdef AURORA_NEURAL
+    if (fx == "neural_vc") {
+        auto n = std::make_unique<neural::NeuralVC>();
+        n->modelPath = s.string("model", "");
+        n->safetyMs = (float)s.number("safety_ms", 3);
+        n->type = fx;
+        return n;
+    }
+#endif
     return nullptr;
 }
 

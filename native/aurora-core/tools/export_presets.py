@@ -7,6 +7,10 @@ import sys
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', '..', 'python'))
 from voices.presets import VOICE_PRESETS  # noqa: E402
 from voices.ai_personas import AI_PERSONAS  # noqa: E402
+from voices.neural import NEURAL_VOICES  # noqa: E402
+
+MODELS = os.path.abspath(os.environ.get('AURORA_MODELS') or
+                         os.path.join(os.path.dirname(__file__), '..', '..', '..', 'models'))
 
 
 def persona_config(p: dict) -> dict:
@@ -21,6 +25,11 @@ def main(out_path: str):
             f.write(f"{k}\t{json.dumps({'chain': v['chain']})}\n")
         for k, v in AI_PERSONAS.items():
             f.write(f"{k}\t{json.dumps(persona_config(v))}\n")
+        for k, v in NEURAL_VOICES.items():  # only when the model has been exported
+            model = os.path.join(MODELS, v['model'])
+            if os.path.isfile(model):
+                cfg = {'chain': [{'effect': 'neural_vc', 'model': model}, *v.get('post_chain', [])]}
+                f.write(f"{k}\t{json.dumps(cfg)}\n")
 
 
 if __name__ == '__main__':

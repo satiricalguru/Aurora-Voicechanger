@@ -1,6 +1,3 @@
-/** Demo-scoped product mode. Set VITE_FULL_UI=1 to show Effects / Soundboard / Lab. */
-export const DEMO_MODE = import.meta.env.VITE_FULL_UI !== '1';
-
 /** First character applied on connect when none is active. */
 export const SHOWCASE_VOICE = 'kawaii';
 
@@ -22,7 +19,7 @@ export function resetSetupComplete() {
 
 /** Prefer built-in / MacBook mics; skip virtual cables. */
 export function pickRealMic(devices) {
-  const virtual = /blackhole|voicemod|dubbing|virtual|loopback|soundflower|vb-audio|cable/i;
+  const virtual = /aurora microphone|blackhole|voicemod|dubbing|virtual|loopback|soundflower|vb-audio|cable/i;
   const real = devices.filter(d => d.inputs > 0 && !virtual.test(d.name || ''));
   const def = real.find(d => d.is_default_input);
   if (def) return def;
@@ -30,6 +27,8 @@ export function pickRealMic(devices) {
   return builtIn || real[0] || null;
 }
 
-export function findBlackHole(devices) {
-  return devices.find(d => d.is_blackhole && d.outputs > 0) || null;
+/** Where the changed voice goes: Aurora Microphone, else BlackHole. */
+export function findVirtualMic(devices) {
+  const outs = devices.filter(d => d.outputs > 0);
+  return outs.find(d => d.is_aurora) || outs.find(d => d.is_blackhole) || null;
 }

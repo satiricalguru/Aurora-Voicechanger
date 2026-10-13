@@ -11,6 +11,7 @@
 #include "aurora_core.h"
 #include "dsp/fft.h"
 #include "dsp/pitch_detect.h"
+#include "dsp/resampler.h"
 #include "dsp/spectral.h"
 
 using namespace aurora::dsp;
@@ -153,6 +154,78 @@ static void testTracker() {
     }
 }
 
+static void testResampler() {
+    std::printf("Resampler 48k -> 16k -> 48k\n");
+    Resampler down, up;
+    down.prepare(48000, 16000);
+    up.prepare(16000, 48000);
+    int n = 48000;
+    auto x = sine(1000, n, 0.5f);
+    std::vector<float> mid(down.maxOut(n)), y(up.maxOut((int)mid.size()) + 64);
+    int m = 0, k = 0;
+    for (int i = 0; i < n; i += 64) {
+        std::vector<float> tmp(down.maxOut(64)), tmp2(up.maxOut((int)tmp.size()));
+        int a = down.process(&x[i], 64, tmp.data(), (int)tmp.size());
+        int b = up.process(tmp.data(), a, tmp2.data(), (int)tmp2.size());
+        std::copy(tmp.begin(), tmp.begin() + a, mid.begin() + m);
+        std::copy(tmp2.begin(), tmp2.begin() + b, y.begin() + k);
+        m += a; k += b;
+    }
+    // Output j is the input at j*step: sequences align with no offset. The
+    // delay is in *when* outputs appear (the kernel needs future input), so
+    // the last few outputs are still pending at the end.
+    double delay = down.latencyOut() * 3 + up.latencyOut();
+    double err = 0, ref = 0;
+    for (int i = 4800; i < k; ++i) { err += std::pow(y[i] - x[i], 2); ref += x[i] * x[i]; }
+    double snr = 10 * std::log10(ref / (err + 1e-20));
+    CHECK(16000 - m <= (int)std::ceil(down.latencyOut()) + 1 && 48000 - k <= (int)std::ceil(delay) + 3,
+          "sample counts %d / %d (pending at end: %d / %d)", m, k, 16000 - m, 48000 - k);
+    CHECK(snr > 60, "round trip emission delay %.2f ms, SNR %.1f dB", delay / 48.0, snr);
+    // Alias rejection: 10 kHz tone must vanish below 16k Nyquist.
+    Resampler d2;
+    d2.prepare(48000, 16000);
+    auto hi = sine(10000, n, 0.5f);
+    std::vector<float> o(d2.maxOut(n));
+    int c = d2.process(hi.data(), n, o.data(), (int)o.size());
+    double e = 0;
+    for (int i = 1000; i < c; ++i) e += o[i] * o[i];
+    double db = 10 * std::log10(e / (c - 1000) / 0.125 + 1e-20);
+    CHECK(db < -50, "10 kHz tone after 48k->16k: %.1f dB", db);
+}
+
+static void testDenoise() {
+    std::printf("Denoiser (RNNoise)\n");
+    // Vowel bursts in steady pink-ish noise at ~5 dB SNR.
+    int n = 48000 * 4;
+    auto v = vowel(150, n);
+    std::vector<float> clean(n), noisy(n), out(n);
+    uint32_t s = 7;
+    float lp = 0;
+    for (int i = 0; i < n; ++i) {
+        clean[i] = ((i / 12000) % 2 ? 0.6f : 0.f) * v[i];
+        s = s * 1664525u + 1013904223u;
+        lp = 0.9f * lp + 0.1f * ((int32_t)s / 2147483648.f);
+        noisy[i] = clean[i] + lp * 0.25f;
+    }
+    for (int mode : {1, 2, 3}) {
+        std::string cfg = "{\"chain\":[{\"effect\":\"denoise\",\"mode\":" + std::to_string(mode) + "}]}";
+        int lat = ac_render_offline(cfg.c_str(), noisy.data(), out.data(), n, SR, 64);
+        // Noise left in the gaps (second half, after adaptation), aligned by latency.
+        double before = 0, after = 0, speechKept = 0, speechIn = 0;
+        for (int i = n / 2; i + lat < n; ++i) {
+            bool gap = clean[i] == 0.f && (i % 12000) > 2400 && (i % 12000) < 9600;
+            double a = noisy[i], b = out[i + lat];
+            if (gap) { before += a * a; after += b * b; }
+            else if (clean[i] != 0.f) { speechIn += clean[i] * clean[i]; speechKept += b * b; }
+        }
+        double cut = 10 * std::log10(before / (after + 1e-20));
+        double kept = 10 * std::log10(speechKept / (speechIn + 1e-20));
+        const char* names[] = {"", "low latency", "balanced", "quality"};
+        CHECK(lat >= 0 && cut > 8 && kept > -6, "%-11s latency %5.2f ms, noise in gaps -%.1f dB, speech level %+.1f dB",
+              names[mode], lat * 1000 / SR, cut, kept);
+    }
+}
+
 static void benchPresets(const char* path) {
     std::printf("Presets (%s)\n", path);
     std::ifstream in(path);
@@ -190,6 +263,8 @@ int main(int argc, char** argv) {
     testPitch();
     testFormant();
     testTracker();
+    testResampler();
+    testDenoise();
     if (argc > 1) benchPresets(argv[1]);
     std::printf(failures ? "\n%d FAILED\n" : "\nall passed\n", failures);
     return failures ? 1 : 0;

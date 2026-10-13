@@ -39,7 +39,7 @@ uniform vec2 uRes; uniform float uTime; uniform float uLevel; uniform float uHer
 uniform float uPage; uniform vec3 uTint; uniform vec2 uPointer;
 varying vec2 vUv;
 ${NOISE}
-float fbm(vec3 p){float a=0.5,s=0.0;for(int i=0;i<4;i++){s+=a*snoise(p);p*=2.02;a*=0.5;}return s;}
+float fbm(vec3 p){float a=0.5,s=0.0;for(int i=0;i<3;i++){s+=a*snoise(p);p*=2.02;a*=0.5;}return s;}
 
 vec3 ramp(float t){
   // #000000 → #112d72 → #4b52aa → #a887dc → #e6c4e7 → #fcdbef
@@ -127,7 +127,9 @@ export class AuroraScene {
   constructor(canvas) {
     this.canvas = canvas;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    // The aurora is soft; 1.25x keeps edges crisp at a fraction of the GPU cost
+    // (an audio app should leave the GPU and CPU to the audio).
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
     this.renderer.autoClear = false;
 
     // Pass 1: aurora
@@ -160,7 +162,7 @@ export class AuroraScene {
       uCool: { value: new THREE.Color('#0447ff') },
     };
     this.sphere = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(1, 96),
+      new THREE.IcosahedronGeometry(1, 48),
       new THREE.ShaderMaterial({
         vertexShader: sphereVert,
         fragmentShader: sphereFrag,

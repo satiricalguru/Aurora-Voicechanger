@@ -27,13 +27,19 @@ let state = {
   running: false,
   monitoring: false,
   bypass: false,
+  muted: false,
   activeVoice: null,
+  sounds: [],
+  soundPlaying: false,
+  soundError: null,
+  uploading: 0,
   devices: [],
   dspVoices: bundledVoices.dsp,
   aiVoices: (bundledVoices.ai || []).map(normalizeCharacter),
   settings: {
     vol_mic: 1, vol_voice: 1, vol_sound: 1, vol_monitor: 1,
-    noise_reduction_enabled: false, noise_gate_enabled: true, noise_gate_level: -44,
+    noise_reduction_enabled: false, noise_reduction_mode: 'balanced', noise_reduction_strength: 0.85,
+    noise_gate_enabled: true, noise_gate_level: -44,
   },
   latency: null,
   route: { input: null, output: null },
@@ -70,6 +76,7 @@ function connect() {
     send({ cmd: 'get_audio_settings' });
     send({ cmd: 'get_latency' });
     send({ cmd: 'get_backend' });
+    send({ cmd: 'list_sounds' });
   };
   socket.onmessage = (e) => {
     try { handle(JSON.parse(e.data)); } catch { /* ignore malformed */ }
@@ -94,6 +101,8 @@ function handle(msg) {
       if (msg.running !== state.running) patch.running = msg.running;
       if (msg.monitoring !== state.monitoring) patch.monitoring = msg.monitoring;
       if (typeof msg.bypass === 'boolean' && msg.bypass !== state.bypass) patch.bypass = msg.bypass;
+      if (typeof msg.muted === 'boolean' && msg.muted !== state.muted) patch.muted = msg.muted;
+      if (typeof msg.sound_playing === 'boolean' && msg.sound_playing !== state.soundPlaying) patch.soundPlaying = msg.sound_playing;
       if (msg.voice !== undefined && msg.voice !== state.activeVoice) patch.activeVoice = msg.voice;
       if (msg.latency) patch.latency = msg.latency;
       if (msg.error) patch.lastError = msg.error;
@@ -102,6 +111,7 @@ function handle(msg) {
     }
     case 'virtual_mic':
       setState({ lastError: msg.ok ? null : (msg.msg || 'Virtual mic install failed') });
+      if (msg.ok) send({ cmd: 'get_devices' });
       break;
     case 'devices': setState({ devices: msg.list || [] }); break;
     case 'voices':
@@ -112,6 +122,12 @@ function handle(msg) {
       break;
     case 'voice_set': setState({ activeVoice: msg.id }); break;
     case 'bypass': setState({ bypass: msg.value }); break;
+    case 'mute': setState({ muted: msg.value }); break;
+    case 'sounds':
+      setState({ sounds: msg.list || [], uploading: msg.added ? Math.max(0, state.uploading - 1) : state.uploading, soundError: null });
+      syncSoundHotkeys(msg.list || []);
+      break;
+    case 'sound_error': setState({ soundError: msg.msg, uploading: Math.max(0, state.uploading - 1) }); break;
     case 'monitor': setState({ monitoring: msg.active }); break;
     case 'audio_settings': setState({ settings: msg.settings }); break;
     case 'latency': setState({ latency: { ...msg } }); break;
@@ -148,9 +164,31 @@ export const actions = {
   toggleMonitor: (device = null) => send({ cmd: 'toggle_monitor', device }),
   setDevices: (input, output) => send({ cmd: 'set_devices', input, output }),
   rescan: () => send({ cmd: 'get_devices' }),
-  playSound: (id) => send({ cmd: 'play_sound', id }),
-  stopSound: () => send({ cmd: 'stop_sound' }),
-  playFile: (path) => send({ cmd: 'play_file', path }),
+  toggleMute: () => { setState({ muted: !state.muted }); send({ cmd: 'toggle_mute' }); },
+  playSound: (id) => { setState({ soundPlaying: true }); send({ cmd: 'play_sound', id }); },
+  stopSound: () => { setState({ soundPlaying: false }); send({ cmd: 'stop_sound' }); },
+  // Upload an audio file into the soundboard library (decoded and stored by the engine).
+  addSound: (file) => new Promise((resolve) => {
+    if (file.size > 25 * 1024 * 1024) { setState({ soundError: `${file.name} is larger than 25 MB` }); resolve(false); return; }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const data = String(reader.result).split(',')[1] || '';
+      setState({ uploading: state.uploading + 1, soundError: null });
+      send({ cmd: 'add_sound', name: file.name.replace(/\.[^.]+$/, ''), filename: file.name, data });
+      resolve(true);
+    };
+    reader.onerror = () => { setState({ soundError: `Could not read ${file.name}` }); resolve(false); };
+    reader.readAsDataURL(file);
+  }),
+  updateSound: (id, changes) => {
+    setState({ sounds: state.sounds.map(s => (s.id === id ? { ...s, ...changes } : s)) });
+    send({ cmd: 'update_sound', id, changes });
+  },
+  deleteSound: (id) => {
+    setState({ sounds: state.sounds.filter(s => s.id !== id) });
+    send({ cmd: 'delete_sound', id });
+  },
+  clearSoundError: () => setState({ soundError: null }),
   measureLatency: () => send({ cmd: 'measure_latency' }),
   installVirtualMic: () => send({ cmd: 'install_virtual_mic' }),
   updateSettings: (settings) => {
@@ -158,6 +196,12 @@ export const actions = {
     send({ cmd: 'set_audio_settings', settings });
   },
 };
+
+// Soundboard keybinds: global (work in the background) inside the desktop app.
+function syncSoundHotkeys(list) {
+  const binds = list.filter(s => s.hotkey).map(s => ({ accelerator: s.hotkey, id: s.id }));
+  window.electronAPI?.setSoundHotkeys?.(binds);
+}
 
 export function useEngine() {
   return useSyncExternalStore(

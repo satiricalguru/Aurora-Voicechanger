@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { findBlackHole } from '../lib/demo';
+import { findVirtualMic } from '../lib/demo';
 
 export default function TitleBar({ sections, active, onNav, engine }) {
   let state = 'off';
@@ -11,9 +11,9 @@ export default function TitleBar({ sections, active, onNav, engine }) {
     } else if (engine.running && engine.bypass) {
       state = 'ready';
       label = 'Voice off';
-    } else if (!findBlackHole(engine.devices)) {
+    } else if (!findVirtualMic(engine.devices)) {
       state = 'ready';
-      label = 'Need BlackHole';
+      label = 'Need virtual mic';
     } else {
       state = 'ready';
       label = 'Ready';

@@ -10,10 +10,12 @@
     "start": "npm run dev",
     "vite": "vite",
     "build:ui": "vite build",
-    "build": "npm run build:native && vite build && electron-builder --mac",
+    "build": "npm run build:native && npm run build:driver && vite build && electron-builder --mac",
     "build:win": "vite build && electron-builder --win",
     "build:native": "cmake -S native/aurora-core -B native/aurora-core/build -DCMAKE_BUILD_TYPE=Release && cmake --build native/aurora-core/build -j 8",
-    "test:native": "python3 native/aurora-core/tools/export_presets.py native/aurora-core/build/presets.jsonl && native/aurora-core/build/aurora_bench native/aurora-core/build/presets.jsonl"
+    "test:native": "python3 native/aurora-core/tools/export_presets.py native/aurora-core/build/presets.jsonl && native/aurora-core/build/aurora_bench native/aurora-core/build/presets.jsonl",
+    "build:driver": "drivers/aurora-hal/build.sh && drivers/aurora-hal/build/hal_test drivers/aurora-hal/build/AuroraHAL.driver",
+    "test": "bash tests/run_all.sh"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.8",
@@ -54,6 +56,22 @@
       {
         "from": "native/aurora-core/build/libaurora_core.dylib",
         "to": "python/libaurora_core.dylib"
+      },
+      {
+        "from": "drivers/aurora-hal/",
+        "to": "drivers/aurora-hal/",
+        "filter": [
+          "build/AuroraHAL.driver/**/*",
+          "install.sh",
+          "uninstall.sh"
+        ]
+      },
+      {
+        "from": "models/",
+        "to": "models/",
+        "filter": [
+          "**/*.onnx"
+        ]
       }
     ],
     "mac": {

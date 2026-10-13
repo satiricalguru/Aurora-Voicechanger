@@ -7,4 +7,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // Electron 32+ removed File.path; this is the supported replacement.
   getPathForFile: (file) => webUtils.getPathForFile(file),
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
+  // [{ accelerator: 'Shift+1', id: 'u1234' }] → global shortcuts that play sounds.
+  setSoundHotkeys: (list) => ipcRenderer.invoke('set-sound-hotkeys', list),
 });

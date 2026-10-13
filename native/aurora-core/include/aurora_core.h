@@ -53,11 +53,16 @@ AC_API int ac_set_chain(const char* json);
 AC_API int ac_set_param(const char* effect, const char* param, double value);
 
 /* Engine settings: vol_mic, vol_voice, vol_sound, vol_monitor, bypass,
- * gate_enabled, gate_db, hpf_enabled, limiter_enabled. */
+ * gate_enabled, gate_db, hpf_enabled, limiter_enabled,
+ * nr_mode (0 off, 1 low latency, 2 balanced, 3 quality), nr_strength (0..1),
+ * mute (silences the voice; soundboard still plays),
+ * monitor_voice (1: monitor = voice + sounds; 0: sounds only, for pad preview). */
 AC_API int ac_set_setting(const char* key, double value);
 
 /* Mix mono float samples (at `sample_rate`) into the voice path. */
 AC_API int ac_queue_sound(const float* data, int frames, double sample_rate);
+/* Same, but replaces whatever is playing. */
+AC_API int ac_play_sound(const float* data, int frames, double sample_rate);
 AC_API void ac_clear_sounds(void);
 
 /* Live stats: levels, latency breakdown, DSP load, xruns, spectrum. */
