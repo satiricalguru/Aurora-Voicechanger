@@ -62,7 +62,9 @@ async function main() {
   const js = async (expr) => (await page('Runtime.evaluate', { expression: `(async () => { ${expr} })()`, awaitPromise: true, returnByValue: true })).result.value;
   const shot = async (name) => {
     // 1600 px wide JPEG: sharp in a README, ~200 KB.
-    const { data } = await page('Page.captureScreenshot', { format: 'jpeg', quality: 88, clip: { x: 0, y: 0, width: W, height: H, scale: 1600 / (W * 2) } });
+    // Clip coordinates are document-relative: start at the current scroll position.
+    const { x, y } = await js('return { x: scrollX, y: scrollY }');
+    const { data } = await page('Page.captureScreenshot', { format: 'jpeg', quality: 88, clip: { x, y, width: W, height: H, scale: 1600 / (W * 2) } });
     writeFileSync(join(out, name), Buffer.from(data, 'base64'));
     console.log('wrote', name);
   };
@@ -78,6 +80,7 @@ async function main() {
 
   // ── Screenshots ──
   await js(`window.__send = (c) => { const s = new WebSocket('ws://localhost:9001'); s.onopen = () => { s.send(JSON.stringify(c)); setTimeout(() => s.close(), 300); }; };`);
+  await js(`window.__send({cmd:'set_voice', id:'kawaii'});`); await sleep(2500);  // open on a character, not a leftover chain
   await shot('hero.jpg');
   await nav('Voices'); await sleep(2600); await shot('voices.jpg');
   await nav('Soundboard'); await sleep(2600);
@@ -90,6 +93,7 @@ async function main() {
   await sleep(1200); await shot('setup.jpg');
 
   // ── Screencast tour ──
+  await js(`window.__send({cmd:'set_voice', id:'kawaii'});`);
   await nav('Live'); await sleep(2500);
   let n = 0;
   handlers.push((m) => {
@@ -101,7 +105,7 @@ async function main() {
   await page('Page.startScreencast', { format: 'jpeg', quality: 88, maxWidth: W, maxHeight: H, everyNthFrame: 1 });
   const t0 = Date.now();
   await sleep(1800);
-  for (const id of ['genki', 'akatsume', 'robot', 'kawaii']) {  // voice changes animate the portrait
+  for (const id of ['genki', 'akatsume', 'robot', 'corinne']) {  // voice changes animate the portrait
     await js(`window.__send({cmd:'set_voice', id:'${id}'});`); await sleep(1300);
   }
   await nav('Voices'); await sleep(2200);

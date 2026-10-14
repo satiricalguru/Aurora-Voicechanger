@@ -4,7 +4,11 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Aurora Voice — become anyone, in real time</title>
-<meta name="description" content="Aurora Voice is a real-time voice changer for Mac with anime characters, realistic human voices and 50 effects. Coming soon." />
+<meta name="description" content="Aurora Voice is a real-time voice changer for Mac: 80 voices including on-device AI voices, anime characters and effects, background noise removal, a soundboard for your own clips and its own virtual microphone. Coming soon." />
+<meta property="og:title" content="Aurora Voice — become anyone, in real time" />
+<meta property="og:description" content="80 voices, AI voices on your Mac, noise removal, a soundboard for your own clips and its own virtual mic." />
+<meta property="og:image" content="assets/media/hero.jpg" />
+<meta name="theme-color" content="#000000" />
 <link rel="icon" href="assets/icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,17 +25,18 @@
 html{background:var(--canvas);scroll-behavior:smooth}
 body{margin:0;background:var(--canvas);color:var(--text);font-family:Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
 a{color:inherit;text-decoration:none}
-img{display:block;max-width:100%}
+img,video{display:block;max-width:100%}
 .wrap{max-width:1200px;margin:0 auto;padding:0 24px}
+@media(max-width:600px){.wrap{padding:0 16px}}
 
 /* nav */
-.nav{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border-radius:var(--pill);background:rgba(15,15,16,.6);border:1px solid var(--hair);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);white-space:nowrap}
+.nav{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20;width:max-content;max-width:calc(100vw - 32px);display:flex;align-items:center;gap:6px;padding:6px 6px 6px 14px;border-radius:var(--pill);background:rgba(15,15,16,.6);border:1px solid var(--hair);backdrop-filter:blur(18px) saturate(140%);-webkit-backdrop-filter:blur(18px) saturate(140%);white-space:nowrap}
 .nav .brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin-right:10px}
 .nav .brand img{width:22px;height:22px;border-radius:6px}
 .nav a.l{font-size:14px;color:var(--t3);padding:6px 12px;border-radius:var(--pill);transition:color .2s}
 .nav a.l:hover{color:#fff}
 .nav .cta{font-size:13px;font-weight:500;background:#fff;color:#000;padding:7px 14px;border-radius:var(--pill)}
-@media(max-width:720px){.nav a.l{display:none}}
+@media(max-width:820px){.nav a.l{display:none}}
 
 /* hero */
 .hero{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:140px 16px 120px;overflow:hidden}
@@ -40,9 +45,9 @@ img{display:block;max-width:100%}
 .hero-in{position:relative;max-width:900px}
 .badge{display:inline-flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--t2);padding:6px 12px;border-radius:var(--pill);background:rgba(0,0,0,.4);border:1px solid var(--hair2);backdrop-filter:blur(10px)}
 .badge i{width:6px;height:6px;border-radius:50%;background:var(--signal);box-shadow:0 0 10px var(--signal)}
-h1{font-size:clamp(48px,8.4vw,104px);font-weight:600;letter-spacing:-.057em;line-height:.96;margin:26px 0 0}
+h1{font-size:clamp(46px,8.4vw,104px);font-weight:600;letter-spacing:-.057em;line-height:.96;margin:26px 0 0}
 h1 .soft{color:rgba(255,255,255,.55)}
-.sub{font-size:clamp(16px,1.6vw,19px);color:rgba(255,255,255,.72);max-width:600px;margin:22px auto 0;letter-spacing:-.01em}
+.sub{font-size:clamp(16px,1.6vw,19px);color:rgba(255,255,255,.72);max-width:640px;margin:22px auto 0;letter-spacing:-.01em}
 .actions{display:flex;gap:10px;justify-content:center;margin-top:34px;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:8px;height:48px;padding:0 22px;border-radius:var(--r-ctl);font:500 15px/1 Inter,sans-serif;border:0;cursor:pointer;transition:transform .2s var(--ease),background .2s}
 .btn:active{transform:scale(.97)}
@@ -52,14 +57,19 @@ h1 .soft{color:rgba(255,255,255,.55)}
 .btn-g{background:rgba(0,0,0,.35);color:#fff;border:1px solid var(--hair2);backdrop-filter:blur(10px)}
 .btn-g:hover{background:rgba(0,0,0,.55)}
 .hero-note{margin-top:16px;font-size:13px;color:rgba(255,255,255,.55)}
+.hero-faces{display:flex;justify-content:center;margin-top:30px}
+.hero-faces img{width:44px;height:44px;border-radius:50%;border:2px solid #000;margin-left:-10px;background:var(--s2)}
+.hero-faces img:first-child{margin-left:0}
+.hero-faces span{margin-left:12px;align-self:center;font-size:13px;color:rgba(255,255,255,.7);text-align:left;line-height:1.3}
 
 /* sections */
 section{padding:120px 0 0}
+@media(max-width:600px){section{padding-top:88px}}
 .eyebrow{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
 .eyebrow b{color:var(--signal);font-weight:400}
-h2{font-size:clamp(36px,5vw,60px);font-weight:600;letter-spacing:-.055em;line-height:1.02;margin:14px 0 0;max-width:820px}
+h2{font-size:clamp(34px,5vw,60px);font-weight:600;letter-spacing:-.055em;line-height:1.02;margin:14px 0 0;max-width:820px}
 h2 .dim{color:var(--t4)}
-.lede{color:var(--t3);max-width:600px;margin:18px 0 0;font-size:17px;letter-spacing:-.01em}
+.lede{color:var(--t3);max-width:620px;margin:18px 0 0;font-size:17px;letter-spacing:-.01em}
 
 .reveal{opacity:0;transform:translateY(28px);filter:blur(6px);transition:opacity 1s var(--ease),transform 1s var(--ease),filter 1s var(--ease)}
 .reveal.in{opacity:1;transform:none;filter:none}
@@ -73,15 +83,35 @@ h2 .dim{color:var(--t4)}
 .stat .v{font-size:44px;font-weight:600;letter-spacing:-.05em;font-variant-numeric:tabular-nums}
 .stat .v small{font-size:16px;color:var(--t3);font-weight:500;letter-spacing:0;margin-left:3px}
 .stat .k{color:var(--t3);font-size:14px;margin-top:4px}
-@media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:820px){.stats{grid-template-columns:repeat(2,1fr)}.stat .v{font-size:36px}}
 
-/* characters marquee */
-.marquee{margin-top:56px;display:grid;gap:14px;mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
-.track{display:flex;gap:14px;width:max-content;will-change:transform}
-.face{width:200px;flex:none;border-radius:20px;overflow:hidden;background:var(--s1);border:1px solid var(--hair);position:relative}
-.face img{width:200px;height:200px;object-fit:cover}
-.face span{position:absolute;left:12px;bottom:10px;font-size:14px;font-weight:600;letter-spacing:-.02em;text-shadow:0 2px 12px rgba(0,0,0,.8)}
-.face em{position:absolute;left:12px;top:10px;font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:rgba(255,255,255,.75);background:rgba(0,0,0,.45);padding:3px 7px;border-radius:var(--pill)}
+/* voices marquee: round portraits like the app */
+.marquee{margin-top:56px;display:grid;overflow:hidden;padding:4px 0;gap:18px;mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.track{display:flex;gap:18px;width:max-content;will-change:transform}
+.face{width:132px;flex:none;text-align:center}
+.face .ring{display:block;width:132px;height:132px;border-radius:50%;padding:3px;background:linear-gradient(140deg,var(--c,#4b52aa),rgba(255,255,255,.06));transition:transform .5s var(--ease)}
+.face:hover .ring{transform:scale(1.05)}
+.face img{width:100%;height:100%;border-radius:50%;background:var(--s2)}
+.face b{display:block;margin-top:10px;font-size:14px;font-weight:600;letter-spacing:-.02em}
+.face em{display:inline-block;margin-top:3px;font-style:normal;font-family:var(--mono);font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--t3)}
+@media(max-width:600px){.face{width:104px}.face .ring{width:104px;height:104px}}
+.vfilters{display:flex;gap:8px;flex-wrap:wrap;margin-top:28px}
+.chip{font:500 13px/1 Inter,sans-serif;color:var(--t2);padding:9px 14px;border-radius:var(--pill);border:1px solid var(--hair2);background:transparent;cursor:pointer;transition:background .2s,color .2s}
+.chip:hover{color:#fff}
+.chip.on{background:#fff;color:#000;border-color:#fff}
+
+/* product tour */
+.screen{margin-top:56px;border-radius:20px;overflow:hidden;border:1px solid var(--hair2);background:var(--s1);box-shadow:0 40px 120px -30px rgba(75,82,170,.55),0 0 0 1px rgba(255,255,255,.02)}
+.screen .bar{display:flex;gap:7px;padding:12px 14px;border-bottom:1px solid var(--hair);background:#0b0b0c}
+.screen .bar i{width:11px;height:11px;border-radius:50%;background:#2a2b2e}
+.screen .bar i:nth-child(1){background:#ff5f57}.screen .bar i:nth-child(2){background:#febc2e}.screen .bar i:nth-child(3){background:#28c840}
+.screen video,.screen img{width:100%;aspect-ratio:16/10;object-fit:cover;background:#000}
+.tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:40px}
+.shots{position:relative;margin-top:18px}
+.shots figure{margin:0;display:none}
+.shots figure.on{display:block;animation:fade .6s var(--ease)}
+.shots figcaption{color:var(--t3);font-size:15px;margin-top:14px;max-width:700px}
+@keyframes fade{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* feature grid */
 .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:56px}
@@ -93,11 +123,31 @@ h2 .dim{color:var(--t4)}
 .ico{width:44px;height:44px;border-radius:var(--r-ctl);display:grid;place-items:center;background:rgba(0,136,255,.12);box-shadow:inset 0 0 0 1px rgba(0,136,255,.35);color:var(--signal)}
 .card h3{font-size:22px;font-weight:600;letter-spacing:-.035em;margin:auto 0 0;padding-top:40px}
 .card p{color:var(--t3);margin:8px 0 0;font-size:15px}
+.card .tag{position:absolute;top:28px;right:28px;font-family:var(--mono);font-size:11px;color:var(--t2);padding:4px 9px;border-radius:var(--pill);border:1px solid var(--hair2)}
 .card.wide{grid-column:span 2}
 @media(max-width:900px){.card.wide{grid-column:auto}}
 .bars{display:flex;align-items:flex-end;gap:5px;height:80px;margin-top:22px}
 .bars i{flex:1;border-radius:4px;background:linear-gradient(#a887dc,#4b52aa);height:20%;animation:eq 1.4s var(--ease) infinite alternate}
 @keyframes eq{to{height:100%}}
+.nr{display:flex;gap:6px;margin-top:22px;flex-wrap:wrap}
+.nr span{font-family:var(--mono);font-size:12px;color:var(--t2);padding:6px 10px;border-radius:var(--r-ctl);background:rgba(255,255,255,.04);border:1px solid var(--hair)}
+.nr span b{color:#fff;font-weight:500}
+
+/* latency */
+.lat{display:grid;grid-template-columns:1.1fr 1fr;gap:14px;margin-top:56px}
+@media(max-width:900px){.lat{grid-template-columns:1fr}}
+.meter{border-radius:var(--r-card);border:1px solid var(--hair);background:var(--s1);padding:28px}
+.meter .row{display:grid;grid-template-columns:120px 1fr 64px;align-items:center;gap:14px;margin-top:16px;font-size:14px;color:var(--t2)}
+.meter .row:first-of-type{margin-top:0}
+.meter .track2{display:block;height:10px;border-radius:var(--pill);background:rgba(255,255,255,.05);overflow:hidden}
+.meter .fill{display:block;height:100%;width:0;border-radius:var(--pill);background:linear-gradient(90deg,#4b52aa,#a887dc);transition:width 1.6s var(--ease)}
+.in .meter .fill,.meter.in .fill{width:var(--w)}
+.meter .row .ms{font-family:var(--mono);text-align:right;color:#fff}
+.meter p{color:var(--t3);font-size:13px;margin:22px 0 0}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:12px 0;border-bottom:1px solid var(--hair)}
+th{color:var(--t3);font-weight:500;font-size:11px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase}
+td:not(:first-child),th:not(:first-child){text-align:right;font-family:var(--mono);padding-left:12px}
 
 /* flow */
 .flow{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:56px;counter-reset:s}
@@ -121,7 +171,7 @@ details p{color:var(--t3);margin:12px 0 0;max-width:680px}
 .final{margin:140px 12px 0;border-radius:var(--r-card);overflow:hidden;position:relative;padding:120px 24px;text-align:center;background:linear-gradient(180deg,#000 0%,#112d72 45%,#4b52aa 65%,#a887dc 85%,#fcdbef 100%)}
 .final h2{margin:0 auto}
 footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;padding:40px 24px 48px;max-width:1200px;margin:0 auto;color:var(--t4);font-size:13px}
-@media(prefers-reduced-motion:reduce){.reveal,.line>span{transition:none;opacity:1;transform:none;filter:none}.bars i{animation:none}}
+@media(prefers-reduced-motion:reduce){.reveal,.line>span{transition:none;opacity:1;transform:none;filter:none}.bars i{animation:none}.meter .fill{transition:none}}
 </style>
 </head>
 <body>
@@ -129,8 +179,9 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;paddin
 <nav class="nav" aria-label="Main">
   <a class="brand" href="#top"><img src="assets/icon.png" alt="" />Aurora Voice</a>
   <a class="l" href="#voices">Voices</a>
+  <a class="l" href="#tour">Tour</a>
   <a class="l" href="#features">Features</a>
-  <a class="l" href="#how">How it works</a>
+  <a class="l" href="#latency">Latency</a>
   <a class="l" href="#faq">FAQ</a>
   <a class="cta" href="#soon">Coming soon</a>
 </nav>
@@ -140,12 +191,12 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;paddin
   <div class="hero-in">
     <span class="badge reveal"><i></i>In development · macOS first</span>
     <h1 class="reveal"><span class="line"><span>Become anyone.</span></span><span class="line"><span class="soft">In real time.</span></span></h1>
-    <p class="sub reveal">Aurora Voice turns your mic into anime heroes, realistic human voices and fifty studio effects, live in Discord, games and calls.</p>
+    <p class="sub reveal">80 voices, from AI voices and anime characters to robots and radios. Background noise removal, a soundboard for your own clips and a built-in virtual mic for Discord, games and calls.</p>
     <div class="actions reveal">
       <span class="btn btn-w" aria-disabled="true" id="soon">Download for Mac <small>coming soon</small></span>
-      <a class="btn btn-g" href="#voices">Meet the voices</a>
+      <a class="btn btn-g" href="#tour">Watch the tour</a>
     </div>
-    <p class="hero-note reveal">The app is still being built. Downloads open when the first release is ready.</p>
+    <div class="hero-faces reveal" id="heroFaces"></div>
   </div>
 </header>
 
@@ -154,75 +205,137 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;paddin
     <div class="eyebrow reveal"><b>●</b> Built for live use</div>
     <h2 class="reveal"><span class="line"><span>Fast enough that nobody</span></span><span class="line"><span class="dim">hears the trick.</span></span></h2>
     <div class="stats reveal">
-      <div class="stat"><div class="v">5.3<small>ms</small></div><div class="k">Audio block size</div></div>
-      <div class="stat"><div class="v">28</div><div class="k">Character voices</div></div>
-      <div class="stat"><div class="v">50<small>+</small></div><div class="k">Voice effects</div></div>
-      <div class="stat"><div class="v">100<small>%</small></div><div class="k">On your device</div></div>
+      <div class="stat"><div class="v">~10<small>ms</small></div><div class="k">Added by the voice engine</div></div>
+      <div class="stat"><div class="v">80</div><div class="k">Voices, AI included</div></div>
+      <div class="stat"><div class="v">1.3<small>ms</small></div><div class="k">Audio buffer</div></div>
+      <div class="stat"><div class="v">100<small>%</small></div><div class="k">On your Mac</div></div>
     </div>
   </section>
 
   <section id="voices">
     <div class="eyebrow reveal">01 · Voices</div>
-    <h2 class="reveal"><span class="line"><span>Anime heroes, villains</span></span><span class="line"><span class="dim">and real people.</span></span></h2>
-    <p class="lede reveal">Every character has its own pitch range, formants, breath and attitude. Pick one and start talking.</p>
+    <h2 class="reveal"><span class="line"><span>Every voice has</span></span><span class="line"><span class="dim">a face.</span></span></h2>
+    <p class="lede reveal">AI voices, anime heroes, villains, real people and 49 effects, each with its own hand-built portrait. Search, filter and star the ones you use most.</p>
+    <div class="vfilters reveal" id="vfilters" role="group" aria-label="Filter voices"></div>
   </section>
 </main>
 
 <div class="marquee reveal" id="marquee"></div>
 
 <main class="wrap">
+  <section id="tour">
+    <div class="eyebrow reveal">02 · Tour</div>
+    <h2 class="reveal"><span class="line"><span>One window.</span></span><span class="line"><span class="dim">Everything live.</span></span></h2>
+    <div class="screen reveal">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <video src="assets/media/tour.mp4" poster="assets/media/tour-poster.jpg" autoplay muted loop playsinline preload="metadata" aria-label="Aurora Voice app tour"></video>
+    </div>
+    <div class="tabs reveal" id="tabs" role="tablist"></div>
+    <div class="shots reveal" id="shots">
+      <figure data-tab="Live" class="on"><div class="screen"><div class="bar"><i></i><i></i><i></i></div><img src="assets/media/hero.jpg" alt="Live view with the active voice, meters and latency" loading="lazy" /></div><figcaption>Live: the active voice, mic meter, mute and the latency your call actually hears.</figcaption></figure>
+      <figure data-tab="Voices"><div class="screen"><div class="bar"><i></i><i></i><i></i></div><img src="assets/media/voices.jpg" alt="Voice library with search, filters and favourites" loading="lazy" /></div><figcaption>Voices: one library for characters, AI voices and effects, with search, filters and favourites.</figcaption></figure>
+      <figure data-tab="Soundboard"><div class="screen"><div class="bar"><i></i><i></i><i></i></div><img src="assets/media/soundboard.jpg" alt="Soundboard with custom sounds" loading="lazy" /></div><figcaption>Soundboard: drop in your own clips and give each one a hotkey, volume and loop.</figcaption></figure>
+      <figure data-tab="Voice Lab"><div class="screen"><div class="bar"><i></i><i></i><i></i></div><img src="assets/media/voice-lab.jpg" alt="Voice Lab effect chain editor" loading="lazy" /></div><figcaption>Voice Lab: stack effects in any order, tune them while you talk and save the result as your own voice.</figcaption></figure>
+      <figure data-tab="Setup"><div class="screen"><div class="bar"><i></i><i></i><i></i></div><img src="assets/media/setup.jpg" alt="Setup with devices and noise removal" loading="lazy" /></div><figcaption>Setup: pick your mic, route to Aurora Microphone and turn on background noise removal.</figcaption></figure>
+    </div>
+  </section>
+
   <section id="features">
-    <div class="eyebrow reveal">02 · Features</div>
+    <div class="eyebrow reveal">03 · Features</div>
     <h2 class="reveal"><span class="line"><span>Everything a streamer</span></span><span class="line"><span class="dim">needs, nothing in the way.</span></span></h2>
     <div class="grid">
       <div class="card navy wide reveal">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/></svg></div>
         <div class="bars" aria-hidden="true"></div>
         <h3>Your voice, reshaped live</h3>
-        <p>Pitch, formants and tone change as you speak, with a live meter and latency readout so you always know what the call hears.</p>
+        <p>A native CoreAudio engine moves pitch and formants independently in a few milliseconds, so voices sound like a person, not a chipmunk.</p>
+      </div>
+      <div class="card indigo reveal">
+        <span class="tag">AI</span>
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 17l.8 2.2L22 20l-2.2.8L19 23l-.8-2.2L16 20l2.2-.8z"/></svg></div>
+        <h3>AI voices, on your Mac</h3>
+        <p>Streaming neural voice conversion runs locally on a real-time worker. Nothing is uploaded.</p>
       </div>
       <div class="card reveal">
-        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h4l3-9 4 18 3-9h4"/></svg></div>
-        <h3>Fifty effects</h3>
-        <p>Robots, radios, caves, demons, chipmunks and more, each a few milliseconds of DSP.</p>
+        <span class="tag">New</span>
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h3l2-5 3 10 3-14 3 12 2-3h4"/><path d="M3 3l18 18" opacity=".5"/></svg></div>
+        <h3>Background noise removal</h3>
+        <p>Keyboards, fans and traffic fade out before the voice is changed.</p>
+        <div class="nr"><span><b>Low latency</b> +5 ms</span><span><b>Balanced</b> +15 ms</span><span><b>Studio</b> +30 ms</span></div>
       </div>
       <div class="card reveal">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg></div>
-        <h3>Soundboard</h3>
-        <p>Drop sounds into the call with a key press, or add your own clips.</p>
+        <h3>Soundboard, your sounds</h3>
+        <p>Upload or drag in MP3, WAV, M4A or FLAC clips. Set a global hotkey, volume and loop for each; you hear them too.</p>
       </div>
       <div class="card reveal">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg></div>
         <h3>Voice Lab</h3>
-        <p>Stack effects in any order and tune every knob while you talk.</p>
+        <p>Stack 13 effects in any order, tune every knob while you talk and save the result as your own voice.</p>
       </div>
-      <div class="card indigo reveal">
+      <div class="card navy reveal">
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M8 22h8"/></svg></div>
+        <h3>Its own virtual mic</h3>
+        <p>Aurora Microphone shows up in every app's mic list. No extra audio software to install.</p>
+      </div>
+      <div class="card reveal">
+        <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></div>
+        <h3>Hotkeys everywhere</h3>
+        <p>F1 voice on/off, F2 hear yourself, F3 mute, F4 show the window. They work while you're in a game.</p>
+      </div>
+      <div class="card indigo wide reveal">
         <div class="ico"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></div>
         <h3>Private by design</h3>
-        <p>Audio never leaves your computer. No account, no cloud processing.</p>
+        <p>Audio never leaves your computer: voices, AI models and noise removal all run on your Mac. No account, no cloud processing.</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="latency">
+    <div class="eyebrow reveal">04 · Measured, not guessed</div>
+    <h2 class="reveal"><span class="line"><span>Latency you can</span></span><span class="line"><span class="dim">check yourself.</span></span></h2>
+    <p class="lede reveal">Aurora Voice sends a test click through the whole chain and times it on the way out. These are loopback measurements on a MacBook Air M2.</p>
+    <div class="lat">
+      <div class="meter reveal">
+        <div class="row"><span>Effect voices</span><span class="track2"><span class="fill" style="--w:15%"></span></span><span class="ms">~10 ms</span></div>
+        <div class="row"><span>AI voices</span><span class="track2"><span class="fill" style="--w:46%"></span></span><span class="ms">~30 ms</span></div>
+        <div class="row"><span>Noise removal</span><span class="track2"><span class="fill" style="--w:8%"></span></span><span class="ms">+5 ms</span></div>
+        <p>Time the engine adds after the microphone, at the default 64-frame buffer. The rest comes from the mic itself; a USB or interface mic is faster than the built-in one.</p>
+      </div>
+      <div class="meter reveal">
+        <table>
+          <thead><tr><th>Mic</th><th>Effect voice</th><th>AI voice</th></tr></thead>
+          <tbody>
+            <tr><td>MacBook Air mic</td><td>42 ms</td><td>62 ms</td></tr>
+            <tr><td>AirPods Pro</td><td>43 ms</td><td>64 ms</td></tr>
+          </tbody>
+        </table>
+        <p>End to end, mic to virtual mic, 0 dropouts. The MacBook mic accounts for 31 ms on its own.</p>
       </div>
     </div>
   </section>
 
   <section id="how">
-    <div class="eyebrow reveal">03 · How it works</div>
+    <div class="eyebrow reveal">05 · How it works</div>
     <h2 class="reveal"><span class="line"><span>Works with every app</span></span><span class="line"><span class="dim">that has a mic setting.</span></span></h2>
     <div class="flow">
-      <div class="step reveal"><h4>Speak</h4><p>Your normal microphone goes into Aurora Voice.</p></div>
+      <div class="step reveal"><h4>Speak</h4><p>Your normal microphone goes into Aurora Voice, with noise removed if you like.</p></div>
       <div class="step reveal"><h4>Transform</h4><p>The chosen voice is applied in a few milliseconds.</p></div>
-      <div class="step reveal"><h4>Route</h4><p>A virtual mic carries the new voice to other apps.</p></div>
-      <div class="step reveal"><h4>Play</h4><p>Pick it as the mic in Discord, OBS, Zoom or your game.</p></div>
+      <div class="step reveal"><h4>Route</h4><p>Aurora Microphone carries the new voice, plus your soundboard, to other apps.</p></div>
+      <div class="step reveal"><h4>Play</h4><p>Pick Aurora Microphone in Discord, OBS, Zoom or your game.</p></div>
     </div>
   </section>
 
   <section id="faq">
-    <div class="eyebrow reveal">04 · Questions</div>
+    <div class="eyebrow reveal">06 · Questions</div>
     <h2 class="reveal"><span class="line"><span>Good to know.</span></span></h2>
     <div class="faq reveal">
       <details><summary>When can I download it?</summary><p>Aurora Voice is still in development. Downloads will appear on this page when the first release is ready.</p></details>
-      <details><summary>Which systems will it support?</summary><p>macOS on Apple Silicon and Intel comes first. Windows is planned.</p></details>
-      <details><summary>Will it work in Discord and games?</summary><p>Yes. Aurora Voice outputs to a virtual microphone that any app can select as its input.</p></details>
-      <details><summary>Does my voice get uploaded anywhere?</summary><p>No. All processing happens on your own computer.</p></details>
+      <details><summary>Which systems will it support?</summary><p>macOS on Apple Silicon comes first. Windows is planned.</p></details>
+      <details><summary>Will it work in Discord and games?</summary><p>Yes. Aurora Voice installs its own virtual microphone, Aurora Microphone, which any app can select as its input.</p></details>
+      <details><summary>Can I use my own sounds?</summary><p>Yes. Drag MP3, WAV, M4A, AAC, AIFF or FLAC files (up to two minutes each) onto the soundboard, then give each one a hotkey, a volume and a loop setting.</p></details>
+      <details><summary>Does noise removal add delay?</summary><p>A little. Low latency mode adds about 5 ms, Balanced 15 ms and Studio 30 ms. Pick the trade-off that suits you.</p></details>
+      <details><summary>Does my voice get uploaded anywhere?</summary><p>No. All processing, including the AI voices, happens on your own computer.</p></details>
     </div>
   </section>
 </main>
@@ -238,22 +351,56 @@ footer{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;paddin
 </footer>
 
 <script>
-// Characters for the marquee (portraits live in assets/faces/<id>.jpg)
-const FACES = [
-  ['akatsume','Akuma Rei','Anime'],['genki','Hina','Anime'],['kawaii','Mochi','Anime'],['yoen','Yoru','Anime'],
-  ['lovely','Stella','Anime'],['akari','Luna','Anime'],['kidol','Nova','Anime'],['cartoon_girl','Pippa','Anime'],
-  ['corinne','Claire','Real'],['jennifer','Emma','Real'],['vicky','Scarlett','Real'],['haley','Maddie','Real'],
-  ['claudia','Margot','Real'],['blake','Riley','Real'],['alice','Director Hale','Real'],['agatha','Grandma Rose','Real'],
-  ['creepy_girl','Hollow','Dark'],['runic_sorceress','Runeweaver','Dark'],['ping','Shade','Dark'],['fox','Kitsune','Dark'],
-  ['shiva','Valka','Dark'],['angry_girl','Fury','Dark'],['field','Sentinel','Dark'],['mother_entity','The Matriarch','Creature'],
-  ['aetherian','Xyra','Creature'],['farty_kawaii','Gobbie','Creature'],['guardian_doll','Porcelain','Creature'],['the_ringer','Skullhorn','Creature'],
-];
+// Every voice in the app, with its portrait (assets/avatars/<id>.svg).
+// Generated from python/voices; keep in step with the app.
+const VOICES = [["lyra","Lyra","AI"],["lyra_bright","Lyra Bright","AI"],["lyra_low","Lyra Low","AI"],["akatsume","Akuma Rei","Anime"],["genki","Hina","Anime"],["kawaii","Mochi","Anime"],["yoen","Yoru","Anime"],["lovely","Stella","Anime"],["akari","Luna","Anime"],["kidol","Nova","Anime"],["cartoon_girl","Pippa","Anime"],["corinne","Claire","Real"],["jennifer","Emma","Real"],["vicky","Scarlett","Real"],["haley","Maddie","Real"],["claudia","Margot","Real"],["blake","Riley","Real"],["alice","Director Hale","Real"],["agatha","Grandma Rose","Real"],["creepy_girl","Hollow","Dark"],["runic_sorceress","Runeweaver","Dark"],["ping","Shade","Dark"],["fox","Kitsune","Dark"],["shiva","Valka","Dark"],["angry_girl","Fury","Dark"],["field","Sentinel","Dark"],["mother_entity","The Matriarch","Creature"],["aetherian","Xyra","Creature"],["farty_kawaii","Gobbie","Creature"],["guardian_doll","Porcelain","Creature"],["the_ringer","Skullhorn","Creature"],["robot","Robot","Sci-Fi"],["alien","Alien","Sci-Fi"],["android","Android","Sci-Fi"],["spacemen","Spacemen","Sci-Fi"],["cybertune","Cybertune","Sci-Fi"],["ai_assistant","AI Assistant","Sci-Fi"],["man_to_woman","Man to Woman","Gender"],["woman_to_man","Woman to Man","Gender"],["adult_to_child","Adult to Child","Gender"],["child_to_adult","Child to Adult","Gender"],["dark","Dark","Dark"],["demon","Demon","Dark"],["dark_angel","Dark Angel","Dark"],["zombie","Zombie","Dark"],["venom","Venom","Dark"],["spirit","Ghost","Dark"],["chipmunk","Chipmunk","Fun"],["baby","Baby","Fun"],["helium","Helium","Fun"],["ogre","Ogre","Fun"],["crazy","Crazy","Fun"],["crazy_clown","Crazy Clown","Fun"],["telephone","Telephone","Comm"],["cop_radio","Cop Radio","Comm"],["walkie_talkie","Walkie-Talkie","Comm"],["megaphone","Megaphone","Comm"],["cave","Cave","Environment"],["cathedral","Cathedral","Environment"],["underwater","Underwater","Environment"],["magic_chords","Magic Chords","Musical"],["autotune","Autotune","Musical"],["vibrato_voice","Vibrato","Musical"],["double_voice","Double Voice","Musical"],["octaver","Octaver","Musical"],["wah_wah","Wah-Wah","Musical"],["deep_voice","Deep Voice","Character"],["storyteller","Storyteller","Character"],["whisper","Whisper","Character"],["speech_jammer","Speech Jammer","Character"],["8bit","8-Bit","Retro"],["cs_ct","Counter-Terrorist","Gaming"],["cs_t","Terrorist","Gaming"],["announcer","Game Announcer","Gaming"],["streamer","Streamer","Gaming"],["possessed","Possessed","Horror"],["exorcist","Exorcist","Horror"],["forest","Forest Spirit","Nature"],["wind","Wind","Nature"],["bypass","Original Voice","Clean"]];
+// The first 31 are characters (AI, Anime, Real, Dark, Creature); the rest are effects.
+const group = ([, , tag], i) => i < 31 ? tag : 'Effects';
+const TINT = { AI: '#8b7bff', Anime: '#ff6fb5', Real: '#f0a46a', Dark: '#a04bff', Creature: '#3fd28b', Effects: '#3d8bff' };
+const FILTERS = ['All', 'AI', 'Anime', 'Real', 'Dark', 'Creature', 'Effects'];
+const esc = (s) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+// Hero: a few faces as social proof of the library.
+document.getElementById('heroFaces').innerHTML =
+  ['kawaii', 'lyra', 'akatsume', 'corinne', 'robot', 'the_ringer'].map((id) => `<img src="assets/avatars/${id}.svg" alt="" width="44" height="44">`).join('') +
+  '<span>80 voices<br>ready to talk</span>';
+
+// Voices marquee, filterable.
 const mq = document.getElementById('marquee');
-const rows = [FACES.slice(0, 14), FACES.slice(14)];
-const tracks = rows.map((row, r) => {
-  const t = document.createElement('div'); t.className = 'track';
-  const html = row.map(([id, name, tag]) => `<div class="face"><img src="assets/faces/${id}.jpg" alt="${name}" loading="lazy"><em>${tag}</em><span>${name}</span></div>`).join('');
-  t.innerHTML = html + html; mq.appendChild(t); return t;
+let tracks = [];
+function renderMarquee(filter) {
+  const list = VOICES.map((v, i) => [...v, group(v, i)]).filter((v) => filter === 'All' || v[3] === filter);
+  const nRows = list.length > 24 ? 2 : 1;
+  const per = Math.ceil(list.length / nRows);
+  mq.innerHTML = '';
+  tracks = Array.from({ length: nRows }, (_, r) => {
+    let row = list.slice(r * per, (r + 1) * per);
+    while (row.length < 10) row = row.concat(row);  // short filters still fill the width
+    const t = document.createElement('div'); t.className = 'track';
+    const html = row.map(([id, name, tag, g]) => `<div class="face" style="--c:${TINT[g]}"><span class="ring"><img src="assets/avatars/${id}.svg" alt="${esc(name)}" loading="lazy" width="132" height="132"></span><b>${esc(name)}</b><em>${esc(tag)}</em></div>`).join('');
+    t.innerHTML = html + html; mq.appendChild(t); return t;
+  });
+}
+const vf = document.getElementById('vfilters');
+vf.innerHTML = FILTERS.map((f) => {
+  const n = f === 'All' ? VOICES.length : VOICES.filter((v, i) => group(v, i) === f).length;
+  return `<button class="chip${f === 'All' ? ' on' : ''}" data-f="${f}" aria-pressed="${f === 'All'}">${f} · ${n}</button>`;
+}).join('');
+vf.addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  vf.querySelectorAll('.chip').forEach((c) => { c.classList.toggle('on', c === b); c.setAttribute('aria-pressed', c === b); });
+  renderMarquee(b.dataset.f);
+});
+renderMarquee('All');
+
+// Screenshot tabs.
+const shots = [...document.querySelectorAll('#shots figure')];
+const tabs = document.getElementById('tabs');
+tabs.innerHTML = shots.map((f, i) => `<button class="chip${i ? '' : ' on'}" role="tab" aria-selected="${!i}" data-i="${i}">${f.dataset.tab}</button>`).join('');
+tabs.addEventListener('click', (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  tabs.querySelectorAll('.chip').forEach((c) => { c.classList.toggle('on', c === b); c.setAttribute('aria-selected', c === b); });
+  shots.forEach((f, i) => f.classList.toggle('on', i === +b.dataset.i));
 });
 
 // Scroll reveals
@@ -262,10 +409,11 @@ document.querySelectorAll('.reveal').forEach((el, i) => { el.style.transitionDel
 document.querySelectorAll('.bars').forEach(b => { b.innerHTML = Array.from({ length: 28 }, (_, i) => `<i style="animation-delay:${(i * 0.07) % 1.4}s;animation-duration:${0.8 + (i * 37 % 9) / 10}s"></i>`).join(''); });
 
 // Marquee drifts on its own and speeds up with scroll velocity
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
 let off = 0, lastY = scrollY, vel = 0;
 function loop() {
   const y = scrollY; vel += ((y - lastY) - vel) * 0.1; lastY = y;
-  off += 0.35 + Math.abs(vel) * 0.25;
+  if (!still) off += 0.35 + Math.abs(vel) * 0.25;
   tracks.forEach((t, i) => { const w = t.scrollWidth / 2; const x = (off % w); t.style.transform = `translate3d(${i ? x - w : -x}px,0,0)`; });
   requestAnimationFrame(loop);
 }
@@ -302,8 +450,8 @@ requestAnimationFrame(loop);
   const t0 = performance.now();
   (function f() {
     const p = Math.min(1, scrollY / innerHeight); sm += (p - sm) * .08;
-    gl.uniform1f(ut, (performance.now() - t0) / 1000); gl.uniform1f(us, sm); gl.uniform2f(ur, c.width, c.height); gl.uniform2f(um, mx, my);
-    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); requestAnimationFrame(f);
+    if (p < 1) { gl.uniform1f(ut, (performance.now() - t0) / 1000); gl.uniform1f(us, sm); gl.uniform2f(ur, c.width, c.height); gl.uniform2f(um, mx, my); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); }
+    requestAnimationFrame(f);
   })();
 })();
 </script>
