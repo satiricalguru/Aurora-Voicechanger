@@ -1,7 +1,8 @@
 const {
   app, BrowserWindow, ipcMain, globalShortcut,
-  Tray, Menu, shell, dialog, systemPreferences, nativeImage,
+  Tray, Menu, shell, dialog, systemPreferences, nativeImage, Notification,
 } = require('electron');
+const fs = require('fs');
 const { spawn } = require('child_process');
 const WebSocket = require('ws');
 const path = require('path');
@@ -72,9 +73,28 @@ function connectWS() {
 
   ws = new WebSocket('ws://localhost:9001');
   ws.on('open', () => console.log('[ws] main connected to engine'));
-  ws.on('message', () => {});
+  ws.on('message', (raw) => {
+    let msg;
+    try { msg = JSON.parse(raw); } catch { return; }
+    onEngineMessage(msg);
+  });
   ws.on('close', () => { reconnectTimer = setTimeout(connectWS, 1500); });
   ws.on('error', () => ws.terminate());
+}
+
+// Hotkey results matter most when the window is hidden (mid-game): say so.
+function onEngineMessage(msg) {
+  if (mainWindow?.isVisible() && mainWindow.isFocused()) return;  // the window shows its own toast
+  let body = null;
+  if (msg.type === 'recordings' && msg.replay) {
+    const item = (msg.list || []).find((r) => r.id === msg.added);
+    body = item ? `Saved the last ${Math.round(item.duration)} s as “${item.name}”.` : 'Instant replay saved.';
+  } else if (msg.type === 'recordings' && msg.added) {
+    body = 'Recording saved.';
+  } else if (msg.type === 'record_error') {
+    body = msg.msg;
+  }
+  if (body && Notification.isSupported()) new Notification({ title: 'Aurora Voice', body, silent: true }).show();
 }
 
 function send(cmd) {
@@ -164,6 +184,13 @@ function buildMenu() {
       ],
     },
     {
+      label: 'Recorder',
+      submenu: [
+        { label: 'Save instant replay', accelerator: 'F5', click: () => send({ cmd: 'replay_save' }) },
+        { label: 'Start / stop recording', accelerator: 'F6', click: () => send({ cmd: 'toggle_record' }) },
+      ],
+    },
+    {
       label: 'View',
       submenu: [{ role: 'reload' }, { role: 'toggleDevTools' }, { type: 'separator' }, { role: 'togglefullscreen' }],
     },
@@ -186,6 +213,9 @@ function setupTray() {
     { label: 'Toggle voice on/off', click: () => send({ cmd: 'toggle_bypass' }) },
     { label: 'Mute microphone', click: () => send({ cmd: 'toggle_mute' }) },
     { type: 'separator' },
+    { label: 'Save instant replay', click: () => send({ cmd: 'replay_save' }) },
+    { label: 'Start / stop recording', click: () => send({ cmd: 'toggle_record' }) },
+    { type: 'separator' },
     { label: 'Quit', click: () => { app.isQuitting = true; app.quit(); } },
   ]));
   tray.on('click', () => (mainWindow?.isVisible() ? mainWindow.focus() : mainWindow?.show()));
@@ -198,6 +228,8 @@ const BASE_HOTKEYS = {
   F2: () => send({ cmd: 'toggle_monitor' }),
   F3: () => send({ cmd: 'toggle_mute' }),
   F4: () => (mainWindow?.isVisible() ? mainWindow.hide() : mainWindow?.show()),
+  F5: () => send({ cmd: 'replay_save' }),
+  F6: () => send({ cmd: 'toggle_record' }),
 };
 let soundHotkeys = [];
 
@@ -240,6 +272,13 @@ app.on('before-quit', () => {
 });
 
 app.on('will-quit', () => pyProcess?.kill());
+
+// Only the app's own recordings, never an arbitrary path from the page.
+ipcMain.handle('reveal-recording', (_, file) => {
+  if (typeof file !== 'string' || !/\/recordings\/r[0-9a-f]{10}\.wav$/.test(file) || !fs.existsSync(file)) return false;
+  shell.showItemInFolder(file);
+  return true;
+});
 
 ipcMain.handle('open-external', (_, url) => {
   if (/^(https:|x-apple\.systempreferences:)/.test(url)) shell.openExternal(url);

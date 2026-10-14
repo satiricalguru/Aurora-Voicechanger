@@ -22,7 +22,7 @@ function accelerator(e) {
   if (e.shiftKey) mods.push('Shift');
   const fn = /^F\d{1,2}$/.test(key);
   if (!mods.length && !fn) return null;  // plain letters would fire while typing elsewhere
-  if (['F1', 'F2', 'F3', 'F4'].includes(key) && !mods.length) return null;  // reserved
+  if (['F1', 'F2', 'F3', 'F4', 'F5', 'F6'].includes(key) && !mods.length) return null;  // reserved
   return [...mods, key].join('+');
 }
 const pretty = (acc) => (acc || '').replace('CommandOrControl', '⌘').replace('Shift', '⇧').replace('Alt', '⌥').replace(/\+/g, ' ');

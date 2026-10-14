@@ -9,4 +9,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
   // [{ accelerator: 'Shift+1', id: 'u1234' }] → global shortcuts that play sounds.
   setSoundHotkeys: (list) => ipcRenderer.invoke('set-sound-hotkeys', list),
+  // Show a recording in Finder.
+  revealRecording: (path) => ipcRenderer.invoke('reveal-recording', path),
 });

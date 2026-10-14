@@ -85,7 +85,7 @@ export default function VoiceLab() {
     <section id="lab" className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow">03 · Voice Lab</div>
+          <div className="eyebrow">04 · Voice Lab</div>
           <RevealLines className="h-section" lines={['Build your', <span className="dim" key="d">own voice.</span>]} />
           <FadeUp><p className="lede">Stack effects in any order. Changes go live as you drag.</p></FadeUp>
         </div>

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Power, Headphones, Mic, MicOff } from 'lucide-react';
-import { actions, live } from '../lib/engine';
+import { actions, live, fmtTime } from '../lib/engine';
 import { findVirtualMic } from '../lib/demo';
 import Avatar from './Avatar';
 
@@ -64,6 +64,11 @@ export default function Dock({ engine, voice, onOpenSetup }) {
         <span className="v"><b>{lat.value}</b> {lat.unit}</span>
         <small>{lat.caption}</small>
       </div>
+      {engine.rec?.recording && (
+        <button className="dock-rec" onClick={actions.recordStop} title="Stop recording (F6)" aria-label="Stop recording">
+          <i className="rec-dot" /> {fmtTime(engine.rec.seconds)}
+        </button>
+      )}
       <button className={`btn btn-ghost ${engine.muted ? 'on danger' : ''}`} onClick={actions.toggleMute} aria-label={engine.muted ? 'Unmute microphone' : 'Mute microphone'} aria-pressed={engine.muted} title="Mute (F3)">
         {engine.muted ? <MicOff size={15} /> : <Mic size={15} />}
       </button>

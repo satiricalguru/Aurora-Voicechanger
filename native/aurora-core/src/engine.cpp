@@ -5,6 +5,8 @@
 //   output IOProc (virtual mic, real-time)  -> drift-corrected read from ring
 //   monitor IOProc (headphones, real-time)  -> same, from a second ring
 //   control (any caller of the C API)       -> builds chains, reads stats
+//   recorder (capture.h)                    -> drains the capture history to WAV
+//   Mac audio tap (system_tap.mm, optional) -> writes its own history
 // When mic and output are the same device a single duplex IOProc does all of
 // it with no ring at all.
 
@@ -19,6 +21,7 @@
 #include <vector>
 
 #include "../include/aurora_core.h"
+#include "capture.h"
 #include "dsp/fft.h"
 #include "graph.h"
 #include "json.h"
@@ -29,6 +32,7 @@
 #include "neural/ort_model.h"
 #endif
 #include "rt.h"
+#include "system_tap.h"
 
 using namespace aurora;
 
@@ -316,6 +320,7 @@ public:
         outChannels_ = channelCount(out, kAudioObjectPropertyScopeOutput);
 
         prepareDsp();
+        voiceHist_.setRate(sr_);  // same rate: replay history survives a restart
         outRing_.reset();
         duplex_ = (in == out);
         // Wireless mics deliver audio in bursts: start with ~20 ms of slack.
@@ -449,6 +454,55 @@ public:
 
     void clearSounds() { clearSb_.store(true); }
 
+    // ── Recorder and instant replay ── source 0: the voice the call hears, 1: Mac audio.
+    History* history(int source) { return source == 1 ? &sysHist_ : &voiceHist_; }
+
+    // Not under `ctl`: the first start can wait on macOS's System Audio
+    // Recording prompt for as long as the user takes to answer, and the voice
+    // path (stats, voice changes) must keep working meanwhile.
+    int captureSystem(bool on) {
+        std::lock_guard<std::mutex> g(tapMx_);
+        if (!on) {
+            if (rec_.active() && rec_.source() == 1) return failLocked("stop the Mac audio recording first");
+            tap_.stop();
+            return 0;
+        }
+        if (tap_.active()) return 0;
+        // Ask first (see system_tap.h): never create the tap while the prompt is undecided.
+        switch (capturePermission(true)) {
+            case CapturePermission::Undetermined: requestCapturePermission(); return failLocked("waiting for permission");
+            case CapturePermission::Denied: return failLocked("permission denied");
+            default: break;  // Granted, or Unknown (no TCC preflight on this system): just try
+        }
+        std::string err;
+        tapStarting_.store(true);
+        int rc = tap_.start(&sysHist_, err);
+        tapStarting_.store(false);
+        return rc == 0 ? 0 : failLocked(err);
+    }
+    int failLocked(const std::string& e) {
+        std::lock_guard<std::mutex> g(ctl);
+        return fail(e);
+    }
+
+    int recordStart(int source, const std::string& path) {
+        if (rec_.active()) return fail("already recording");
+        if (source == 1 && !tap_.active()) return fail("Mac audio capture is off");
+        if (source == 0 && !running_.load()) return fail("start the voice path first");
+        std::string err;
+        return rec_.start(history(source), source, path, kMaxRecordSeconds, err) == 0 ? 0 : fail(err);
+    }
+
+    double recordStop() { return rec_.stop(); }
+
+    double replaySave(int source, double seconds, const std::string& path) {
+        if (source == 1 && !tap_.active()) { fail("Mac audio capture is off"); return -1; }
+        std::string err;
+        double s = saveReplay(*history(source), seconds, path, err);
+        if (s < 0) fail(err);
+        return s;
+    }
+
     bool running() const { return running_.load(); }
     bool monitoring() const { return monitoring_.load(); }
     int fail(const std::string& e) { lastError = e; return -1; }
@@ -461,6 +515,13 @@ public:
 private:
     static constexpr int kMaxBlock = 1024;
     static constexpr int kScope = 1024;
+    static constexpr double kMaxRecordSeconds = 30 * 60;
+
+    History voiceHist_, sysHist_;
+    SystemTap tap_;
+    Recorder rec_;
+    std::mutex tapMx_;
+    std::atomic<bool> tapStarting_{false};  // waiting on the permission prompt, typically
 
     AudioObjectID inDev_ = kAudioObjectUnknown, outDev_ = kAudioObjectUnknown, monDev_ = kAudioObjectUnknown;
     AudioDeviceIOProcID inProc_ = nullptr, outProc_ = nullptr, monProc_ = nullptr;
@@ -636,6 +697,7 @@ private:
         acc = 0;
         for (int i = 0; i < n; ++i) acc += x[i] * x[i];
         outRms_.set(linToDb(std::sqrt(acc / n)));
+        voiceHist_.push(x, n);  // recorder / instant replay: exactly what the call hears
         int sp = scopePos_.load(std::memory_order_relaxed);
         for (int i = 0; i < n; ++i) { scope_[sp] = x[i]; sp = (sp + 1) & (kScope - 1); }
         scopePos_.store(sp, std::memory_order_relaxed);
@@ -834,6 +896,20 @@ std::string Engine::statsJson() {
     w.kv("voice_activity", denoise_.vad(), 3);
     w.kv("sound_remaining_ms", sbRing_.size() * 1000.0 / sr_, 0);
     w.kvb("muted", mute.load());
+    w.key("capture");
+    w.beginObj();
+    w.kvb("recording", rec_.active());
+    w.kvb("record_pending", rec_.pending());  // ended on its own; ac_record_stop collects it
+    w.kvi("record_source", rec_.source());
+    w.kv("record_seconds", rec_.seconds(), 2);
+    w.kv("voice_seconds", voiceHist_.seconds(), 2);
+    w.kv("voice_peak", voiceHist_.takePeak(), 3);
+    w.kvb("system", tap_.active());
+    w.kvb("system_starting", tapStarting_.load());
+    w.kvi("system_permission", (int)capturePermission());  // -1 unknown, 0 granted, 1 denied, 2 not asked yet
+    w.kv("system_seconds", tap_.active() ? sysHist_.seconds() : 0.0, 2);
+    w.kv("system_peak", sysHist_.takePeak(), 3);
+    w.endObj();
     w.kv("cpu", dspLoad_.get(), 3);
     w.kv("cpu_peak", dspPeak_.get(), 3);
     w.kv("dsp_time_ms", dspMs_.get(), 3);
@@ -1058,6 +1134,28 @@ int ac_play_sound(const float* data, int frames, double sample_rate) {
 }
 
 void ac_clear_sounds(void) { Engine::get().clearSounds(); }
+
+int ac_capture_system(int on) { return Engine::get().captureSystem(on != 0); }
+
+int ac_record_start(int source, const char* path) {
+    if (!path || !*path) return -1;
+    auto& e = Engine::get();
+    std::lock_guard<std::mutex> g(e.ctl);
+    return e.recordStart(source, path);
+}
+
+double ac_record_stop(void) {
+    auto& e = Engine::get();
+    std::lock_guard<std::mutex> g(e.ctl);
+    return e.recordStop();
+}
+
+double ac_replay_save(int source, double seconds, const char* path) {
+    if (!path || !*path) return -1;
+    auto& e = Engine::get();
+    std::lock_guard<std::mutex> g(e.ctl);
+    return e.replaySave(source, seconds, path);
+}
 
 int ac_get_stats(char* buf, int cap) {
     auto& e = Engine::get();

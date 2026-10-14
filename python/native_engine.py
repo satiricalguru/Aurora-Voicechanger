@@ -125,6 +125,11 @@ class NativeAudioEngine:
         L.ac_set_setting.argtypes = [c_char_p, c_double]
         L.ac_queue_sound.argtypes = [ctypes.POINTER(ctypes.c_float), c_int, c_double]
         L.ac_play_sound.argtypes = [ctypes.POINTER(ctypes.c_float), c_int, c_double]
+        L.ac_capture_system.argtypes = [c_int]
+        L.ac_record_start.argtypes = [c_int, c_char_p]
+        L.ac_record_stop.restype = c_double
+        L.ac_replay_save.argtypes = [c_int, c_double, c_char_p]
+        L.ac_replay_save.restype = c_double
         L.ac_render_offline.argtypes = [c_char_p, ctypes.POINTER(ctypes.c_float),
                                         ctypes.POINTER(ctypes.c_float), c_int, c_double, c_int]
 
@@ -412,6 +417,30 @@ class NativeAudioEngine:
     def stop_sounds(self):
         self._sound_gen += 1  # ends any loop
         self._lib.ac_clear_sounds()
+
+    # ── Recorder and instant replay (source 0: voice, 1: Mac audio) ──────────
+
+    # These raise RuntimeError: recorder errors go to the recorder UI, not the
+    # engine's error banner.
+    def capture_system(self, on: bool):
+        if self._lib.ac_capture_system(1 if on else 0) != 0:
+            raise RuntimeError(self._err())
+
+    def record_start(self, source: int, path: str):
+        if self._lib.ac_record_start(int(source), path.encode()) != 0:
+            raise RuntimeError(self._err())
+
+    def record_stop(self) -> float:
+        return float(self._lib.ac_record_stop())
+
+    def replay_save(self, source: int, seconds: float, path: str) -> float:
+        got = float(self._lib.ac_replay_save(int(source), float(seconds), path.encode()))
+        if got < 0:
+            raise RuntimeError(self._err())
+        return got
+
+    def capture_status(self) -> dict:
+        return self.stats().get('capture', {})
 
     # ── Stats ─────────────────────────────────────────────────────────────────
 

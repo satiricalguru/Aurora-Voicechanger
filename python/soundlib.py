@@ -99,7 +99,9 @@ class SoundLibrary:
 
     # ── edits ─────────────────────────────────────────────────────────────────
     def add(self, name: str, filename: str, data_b64: str) -> dict:
-        raw = base64.b64decode(data_b64, validate=False)
+        return self.add_bytes(name, filename, base64.b64decode(data_b64, validate=False))
+
+    def add_bytes(self, name: str, filename: str, raw: bytes) -> dict:
         if not raw:
             raise ValueError('empty file')
         if len(raw) > MAX_UPLOAD_BYTES:

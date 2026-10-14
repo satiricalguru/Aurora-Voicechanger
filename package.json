@@ -89,7 +89,8 @@
       "entitlementsInherit": "build/entitlements.plist",
       "hardenedRuntime": true,
       "extendInfo": {
-        "NSMicrophoneUsageDescription": "Aurora Voice needs your microphone to change your voice in real time."
+        "NSMicrophoneUsageDescription": "Aurora Voice needs your microphone to change your voice in real time.",
+        "NSAudioCaptureUsageDescription": "Aurora Voice records audio from other apps (YouTube, games) when you choose Mac audio in the Recorder."
       },
       "icon": "build/icon.icns"
     },

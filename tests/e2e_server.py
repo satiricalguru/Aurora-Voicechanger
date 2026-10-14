@@ -143,6 +143,59 @@ async def main(data_dir):
     r = await rpc({'cmd': 'delete_sound', 'id': sid}, 'sounds')
     check(all(x['id'] != sid for x in r['list']), 'delete')
 
+    print('Recorder and instant replay')
+    r = await rpc({'cmd': 'list_recordings'}, 'recordings')
+    st = r['status']
+    check(st['supported'] and r['list'] == [] and st['replay']['replay_source'] == 'voice', 'recorder ready, empty library')
+    await rpc({'cmd': 'play_sound', 'id': 3}, 'sound_playing')  # evil laugh: loud and long
+    await asyncio.sleep(1.5)
+    r = await rpc({'cmd': 'replay_save', 'seconds': 2})
+    item = next((x for x in r.get('list', []) if x['id'] == r.get('added')), None)
+    check(r['type'] == 'recordings' and item and item['kind'] == 'replay' and abs(item['duration'] - 2) < 0.05
+          and not item['silent'] and len(item['peaks']) == 96, f"instant replay saved {item and item['duration']} s with audio")
+    await rpc({'cmd': 'stop_sound'}, 'sound_stopped')
+
+    r = await rpc({'cmd': 'record_start', 'source': 'voice'})
+    await asyncio.sleep(0.2)
+    check(r['type'] == 'recordings' and (await level())['capture']['recording'], 'recording starts')
+    r = await rpc({'cmd': 'record_start', 'source': 'voice'})
+    check(r['type'] == 'record_error', f"second recording refused ({r.get('msg')})")
+    await rpc({'cmd': 'play_sound', 'id': 3}, 'sound_playing')
+    await asyncio.sleep(1.2)
+    r = await rpc({'cmd': 'record_stop'}, 'recordings')
+    rec = next((x for x in r['list'] if x['id'] == r.get('added')), None)
+    check(rec and rec['kind'] == 'recording' and 1.3 < rec['duration'] < 2.0 and not rec['silent']
+          and os.path.isfile(rec['path']), f"recording kept: {rec and rec['duration']} s, file on disk")
+    await rpc({'cmd': 'stop_sound'}, 'sound_stopped')
+    r = await rpc({'cmd': 'rename_recording', 'id': rec['id'], 'name': '  Laugh   take '}, 'recordings')
+    check(next(x for x in r['list'] if x['id'] == rec['id'])['name'] == 'Laugh take', 'rename')
+    r = await rpc({'cmd': 'recording_audio', 'id': rec['id']}, 'recording_audio')
+    check(base64.b64decode(r['data'])[:4] == b'RIFF', 'preview audio is a WAV')
+    r = await rpc({'cmd': 'recording_to_sound', 'id': rec['id'], 'start': 0.3, 'end': 1.1})
+    pad = next((x for x in r.get('list', []) if x['id'] == r.get('added')), None)
+    check(r['type'] == 'sounds' and pad and abs(pad['duration'] - 0.8) < 0.02 and pad['name'] == 'Laugh take',
+          f"trimmed clip on the soundboard ({pad and pad['duration']} s)")
+    r = await rpc({'cmd': 'recording_to_sound', 'id': rec['id'], 'start': 1.0, 'end': 1.0})
+    check(r['type'] == 'record_error', 'empty selection refused')
+    await rpc({'cmd': 'delete_sound', 'id': pad['id']}, 'sounds')
+    r = await rpc({'cmd': 'toggle_record', 'source': 'voice'}, 'recordings')
+    await asyncio.sleep(0.4)
+    r = await rpc({'cmd': 'toggle_record'}, 'recordings')
+    check(r.get('added') and not r['status']['recording'], 'toggle_record starts and stops (F6)')
+    r = await rpc({'cmd': 'set_replay', 'settings': {'replay_seconds': 12, 'replay_source': 'mac'}}, 'recordings')
+    await asyncio.sleep(0.5)
+    st = (await level())['capture']
+    # Without System Audio Recording permission the tap waits (prompt) or reports denied, never hangs.
+    perm = {0: 'granted', 1: 'denied', 2: 'not asked', -1: 'unknown'}.get(st['mac_permission'], '?')
+    check(r['status']['replay']['replay_seconds'] == 10 and (st['mac_capture'] or st['mac_pending'] or st['mac_permission'] == 1),
+          f"replay length snaps to 10 s; Mac audio tap opens or waits for permission ({perm})")
+    r = await rpc({'cmd': 'set_replay', 'settings': {'replay_source': 'voice', 'replay_seconds': 30}}, 'recordings')
+    check(not r['status']['mac_capture'] and not r['status']['mac_pending'], 'Mac audio tap closes when nothing needs it')
+    for x in list(r['list']):
+        r = await rpc({'cmd': 'delete_recording', 'id': x['id']}, 'recordings')
+    check(r['list'] == [], 'delete')
+    check(not any(f.endswith('.wav') for f in os.listdir(os.path.join(data_dir, 'recordings'))), 'files removed')
+
     print('Latency')
     await rpc({'cmd': 'set_voice', 'id': 'kawaii'}, 'voice_set')
     await asyncio.sleep(1.0)

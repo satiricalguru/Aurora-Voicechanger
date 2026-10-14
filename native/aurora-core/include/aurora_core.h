@@ -65,7 +65,23 @@ AC_API int ac_queue_sound(const float* data, int frames, double sample_rate);
 AC_API int ac_play_sound(const float* data, int frames, double sample_rate);
 AC_API void ac_clear_sounds(void);
 
-/* Live stats: levels, latency breakdown, DSP load, xruns, spectrum. */
+/* Recorder and instant replay. Sources: 0 = the voice the call hears
+ * (voice + soundboard, post-limiter), 1 = Mac audio (every other app, through
+ * a Core Audio process tap; macOS 14.2+, asks for System Audio Recording
+ * permission). Each source keeps the last ~85 s in memory.
+ * Files are 16-bit mono WAV at the source's rate. */
+/* Start/stop the Mac audio tap. Needs System Audio Recording permission:
+ * when it hasn't been decided yet this shows the macOS prompt and fails with
+ * "waiting for permission" (call again once stats' capture.system_permission
+ * is 0); "permission denied" when the user said no. */
+AC_API int ac_capture_system(int on);
+AC_API int ac_record_start(int source, const char* wav_path);
+AC_API double ac_record_stop(void);                      /* seconds recorded, -1 if idle */
+/* Last `seconds` of a source to a WAV file; returns the seconds written or -1. */
+AC_API double ac_replay_save(int source, double seconds, const char* wav_path);
+
+/* Live stats: levels, latency breakdown, DSP load, xruns, spectrum,
+ * capture state ("capture": recording, record_seconds, voice_seconds, ...). */
 AC_API int ac_get_stats(char* buf, int cap);
 
 /* Loopback measurement through the output device's own input side (works on

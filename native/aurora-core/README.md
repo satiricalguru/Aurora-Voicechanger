@@ -52,6 +52,23 @@ First model: [LLVC](https://github.com/KoeAI/LLVC) (MIT, 3.3 M parameters, 16 kH
 
 Microsoft's ONNX Runtime build (shipped in the `onnxruntime` pip package, which `native_engine.py` finds automatically) runs a step in ~4.2 ms; Homebrew's build takes ~6.2 ms. Set `AURORA_ORT_LIB` to choose explicitly.
 
+## Recorder and instant replay (`src/capture.h`, `src/system_tap.mm`)
+
+Two sources, each with a `History`: an ~87 s mono ring with a 64-bit sample counter that the audio thread only copies into.
+
+- **Voice (0):** the post-limiter output, exactly what the call hears (voice and soundboard).
+- **Mac audio (1):** a Core Audio process tap (macOS 14.2+). It is a mono global tap that excludes this process, delivered through a private aggregate device to its own IOProc.
+
+Using them:
+
+- **Instant replay** (`ac_replay_save`) copies the last N seconds to a 16-bit WAV file.
+- **Recording** (`ac_record_start` / `ac_record_stop`) runs a thread that drains the ring into a WAV every 40 ms, up to 30 minutes. If the source restarts at another rate, or the time limit is hit, the thread finalises the file itself; stats then show `record_pending` until it is collected.
+- **Safety:** readers stay 1.4 s behind the ring's oldest sample, so they never touch the slot being written.
+
+The tap needs the System Audio Recording permission (`NSAudioCaptureUsageDescription` in the app bundle). `ac_capture_system` checks it first with TCC's preflight call. If the user hasn't answered yet, it shows the prompt and returns at once. A tap created while that prompt is undecided would hold Core Audio's own lock for the whole process until the user answers, freezing even device listing.
+
+Tests: `aurora_bench` covers the history, WAV output, recorder limits and epochs offline. `aurora_capture_probe <mic> <virtual mic> [--system]` checks both sources on real devices.
+
 ## Measured (MacBook Air M2, built-in mic -> BlackHole 2ch, 48 kHz)
 
 | HAL buffer | After-mic path (measured) | Total incl. mic converter | Dropouts |

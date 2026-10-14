@@ -9,6 +9,8 @@ import TitleBar from './components/TitleBar';
 import Hero from './components/Hero';
 import Voices from './components/Voices';
 import Soundboard from './components/Soundboard';
+import Recorder from './components/Recorder';
+import Toast from './components/Toast';
 import VoiceLab from './components/VoiceLab';
 import Setup from './components/Setup';
 import Dock from './components/Dock';
@@ -18,6 +20,7 @@ export const SECTIONS = [
   { id: 'home', label: 'Live' },
   { id: 'voices', label: 'Voices' },
   { id: 'soundboard', label: 'Soundboard' },
+  { id: 'recorder', label: 'Recorder' },
   { id: 'lab', label: 'Voice Lab' },
   { id: 'setup', label: 'Setup' },
 ];
@@ -72,14 +75,16 @@ export default function App() {
         <Hero engine={engine} voice={voice} onNav={scrollTo} onOpenSetup={() => setSetupOpen(true)} />
         <Voices engine={engine} />
         <Soundboard engine={engine} />
+        <Recorder engine={engine} />
         <VoiceLab />
         <Setup engine={engine} onOpenSetup={() => setSetupOpen(true)} />
         <footer className="footer">
           <span>Aurora Voice 0.2 · native engine · everything runs on your Mac</span>
-          <span>F1 voice · F2 hear myself · F3 mute · F4 show/hide</span>
+          <span>F1 voice · F2 hear myself · F3 mute · F4 show/hide · F5 replay · F6 record</span>
         </footer>
       </main>
       <Dock engine={engine} voice={voice} onOpenSetup={() => setSetupOpen(true)} />
+      <Toast toast={engine.toast} />
       <AnimatePresence>
         {showSheet && (
           <FirstRunSheet

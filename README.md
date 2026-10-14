@@ -61,6 +61,20 @@
       <b>Aurora Microphone</b> is a CoreAudio driver that shows up in Discord, OBS, Zoom and games. BlackHole works as a fallback.
     </td>
   </tr>
+  <tr>
+    <td valign="top">
+      <h3>⏺️ Recorder</h3>
+      Record what your call hears, or <b>Mac audio</b> from any app (YouTube, games). Streams to WAV for up to 30 minutes.
+    </td>
+    <td valign="top">
+      <h3>⏪ Instant Replay</h3>
+      The last 10, 30 or 60 s stay in memory. Press <kbd>F5</kbd> after something happens and it's saved, even mid-game.
+    </td>
+    <td valign="top">
+      <h3>✂️ Clip to soundboard</h3>
+      Preview any recording, trim it on its waveform and turn it into a soundboard pad in one click.
+    </td>
+  </tr>
 </table>
 
 <p align="center">
@@ -160,6 +174,8 @@ Without the model the AI voices are hidden and everything else works. Microsoft'
 | <kbd>F2</kbd> | Hear myself |
 | <kbd>F3</kbd> | Mute the mic |
 | <kbd>F4</kbd> | Show / hide the window |
+| <kbd>F5</kbd> | Save instant replay |
+| <kbd>F6</kbd> | Start / stop recording |
 | Your choice | Any soundboard pad (e.g. <kbd>⇧</kbd> <kbd>1</kbd>), global in the desktop app |
 
 ## 🏗️ How it's built
@@ -182,6 +198,7 @@ flowchart TB
 - **Voice changes** are built off the audio thread, swapped atomically and crossfaded over 12 ms. Old chains are freed off the audio thread.
 - **Noise removal:** RNNoise 0.2 (BSD-3), with a gain-only API added so it can run in low-delay modes.
 - **AI voices:** a streaming ONNX model on a Mach real-time worker, fed through band-limited resamplers with a fixed lead, so latency stays constant.
+- **Recorder and Instant Replay:** each source writes into an ~85 s lock-free history ring. Replay copies the last N seconds out; the recorder thread streams the ring to WAV every 40 ms. **Mac audio** comes from a Core Audio process tap (macOS 14.2+) that leaves Aurora's own output out. The app asks for System Audio Recording permission before creating the tap, because an undecided prompt would stall Core Audio for the whole process.
 - **Aurora Microphone:** an AudioServerPlugIn with zero added latency, sample-time-indexed loopback, and silence instead of stale audio. It never becomes the default output, so system sounds can't leak into calls.
 
 Deep dives: [engine](native/aurora-core/README.md) · [virtual mic](drivers/aurora-hal/README.md)
@@ -213,8 +230,9 @@ Runs everything:
 
 1. **Native benchmark:** about 100 checks on the FFT, pitch accuracy (±2.2 cents), formants, resampler (77 dB SNR), denoiser and every preset.
 2. **Driver tests:** loads the bundle the way `coreaudiod` does and checks sample-exact loopback.
-3. **Live end-to-end test:** drives the real server over WebSocket with real devices. It covers voices, mute, noise modes, sound uploads (WAV/AAC, bad files rejected), rename/volume/loop/hotkey, looping, stop, delete, and a loopback latency check.
-4. **UI build.**
+3. **Recorder on real devices:** a pad played through the live engine must come back sample-for-sample in instant replay and in a recording.
+4. **Live end-to-end test:** drives the real server over WebSocket with real devices. It covers voices, mute, noise modes, sound uploads (WAV/AAC, bad files rejected), rename/volume/loop/hotkey, looping, stop, delete, recording, instant replay, trimming a recording into a pad, and a loopback latency check.
+5. **UI build.**
 
 Use `E2E_MIC=airpods npm test` to run the live test on another microphone.
 
@@ -224,7 +242,7 @@ Use `E2E_MIC=airpods npm test` to run the live test on another microphone.
 | --- | --- |
 | `native/aurora-core/` | C++ engine: CoreAudio I/O, DSP, noise removal, neural worker, C API, tests |
 | `drivers/aurora-hal/` | Aurora Microphone virtual mic (AudioServerPlugIn) |
-| `python/` | WebSocket control server, voice presets, sound library, ctypes bridge |
+| `python/` | WebSocket control server, voice presets, sound library, recorder, ctypes bridge |
 | `electron/` | Window, tray, menu, global hotkeys; starts the engine |
 | `src/` | React UI: Live, Voices, Soundboard, Voice Lab, Setup; WebGL scene in `src/gl/` |
 | `src/assets/avatars/` | The 80 voice portraits (SVG) |
@@ -243,7 +261,7 @@ Use `E2E_MIC=airpods npm test` to run the live test on another microphone.
 - [x] Voice library with portraits, search and favourites
 - [x] Soundboard with custom uploads and global hotkeys
 - [x] Saved Voice Lab voices
-- [ ] Recorder and instant replay
+- [x] Recorder and Instant Replay (your voice or Mac audio), trim to soundboard
 - [ ] Our own streaming voice model with licensed voice-actor data
 - [ ] Signed and notarised release (Developer ID)
 - [ ] Windows (WASAPI and a virtual mic driver)

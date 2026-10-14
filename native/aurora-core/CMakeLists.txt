@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(aurora_core VERSION 0.1.0 LANGUAGES C CXX)
+project(aurora_core VERSION 0.1.0 LANGUAGES C CXX OBJCXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,7 +15,8 @@ set(CMAKE_OSX_DEPLOYMENT_TARGET 12.0)
 
 add_compile_options(-Wall -Wextra -Wno-unused-parameter -fno-math-errno)
 
-set(SOURCES src/engine.cpp src/graph.cpp)
+set(SOURCES src/engine.cpp src/graph.cpp src/system_tap.mm)
+set_source_files_properties(src/system_tap.mm PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 
 # Neural voices: ONNX Runtime headers at build time; the library is dlopen'ed
 # at run time, so the engine still works where it is missing.
@@ -30,7 +31,7 @@ if(ORT_INCLUDE)
 else()
   message(STATUS "ONNX Runtime headers not found: neural voices disabled")
 endif()
-set(FRAMEWORKS "-framework CoreAudio" "-framework CoreFoundation" "-framework Accelerate")
+set(FRAMEWORKS "-framework CoreAudio" "-framework CoreFoundation" "-framework Foundation" "-framework Accelerate")
 
 # RNNoise 0.2 (BSD-3-Clause) for background-noise removal; see third_party/rnnoise.
 file(GLOB RNNOISE_SOURCES third_party/rnnoise/src/*.c)
@@ -52,3 +53,8 @@ target_link_libraries(aurora_bench PRIVATE aurora_core rnnoise ${FRAMEWORKS})
 add_executable(aurora_monitor_probe tests/monitor_probe.cpp)
 target_include_directories(aurora_monitor_probe PRIVATE include)
 target_link_libraries(aurora_monitor_probe PRIVATE aurora_core ${FRAMEWORKS})
+
+# Device test: recorder and instant replay (voice path; --system also taps Mac audio).
+add_executable(aurora_capture_probe tests/capture_probe.cpp)
+target_include_directories(aurora_capture_probe PRIVATE include)
+target_link_libraries(aurora_capture_probe PRIVATE aurora_core ${FRAMEWORKS})

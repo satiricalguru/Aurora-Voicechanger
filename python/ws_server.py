@@ -28,6 +28,19 @@ from soundlib import SoundLibrary  # noqa: E402
 library = SoundLibrary()
 engine.library = library
 
+from recorder import Recorder  # noqa: E402
+recorder = Recorder(engine, library)
+
+
+def recordings_msg(**extra) -> dict:
+    return {'type': 'recordings', 'list': recorder.list(), 'status': recorder.status(), **extra}
+
+
+CONNECTIONS: set = set()
+# Changes every window should see, even when another client (the desktop
+# app's hotkeys) made them.
+SHARED = ('recordings', 'sounds')
+
 
 async def handle(websocket):
     print(f"[ws] Client connected: {websocket.remote_address}")
@@ -42,7 +55,15 @@ async def handle(websocket):
                 response = await dispatch(cmd)
             except Exception as e:
                 response = {'type': 'error', 'msg': f'dispatch error: {e}'}
-            await websocket.send(json.dumps(response))
+            msg = json.dumps(response)
+            await websocket.send(msg)
+            if response.get('type') in SHARED:
+                for other in list(CONNECTIONS):
+                    if other is not websocket:
+                        try:
+                            await other.send(msg)
+                        except Exception:
+                            pass
     except websockets.exceptions.ConnectionClosed:
         print("[ws] Client disconnected")
 
@@ -99,6 +120,59 @@ async def dispatch(cmd: dict) -> dict:
     elif c == 'delete_sound':
         library.delete(str(cmd.get('id', '')))
         return {'type': 'sounds', 'list': library.list()}
+
+    # ── Recorder and instant replay ───────────────────────────────────────────
+    elif c == 'list_recordings':
+        return recordings_msg()
+
+    elif c in ('record_start', 'record_stop', 'toggle_record'):
+        try:
+            if c == 'record_start' or (c == 'toggle_record' and not recorder.current):
+                await asyncio.to_thread(recorder.start, cmd.get('source'))
+                return recordings_msg()
+            item = await asyncio.to_thread(recorder.stop)
+            return recordings_msg(added=item and item['id'])
+        except (RuntimeError, ValueError) as e:
+            return {'type': 'record_error', 'msg': str(e)}
+
+    elif c == 'replay_save':
+        try:
+            item = await asyncio.to_thread(recorder.save_replay, cmd.get('seconds'))
+        except RuntimeError as e:
+            return {'type': 'record_error', 'msg': str(e)}
+        return recordings_msg(added=item['id'], replay=True)
+
+    elif c == 'set_replay':
+        await asyncio.to_thread(recorder.configure, dict(cmd.get('settings', {})))
+        return recordings_msg()
+
+    elif c == 'rename_recording':
+        try:
+            recorder.rename(str(cmd.get('id', '')), cmd.get('name', ''))
+        except KeyError:
+            return {'type': 'record_error', 'msg': 'recording not found'}
+        return recordings_msg()
+
+    elif c == 'delete_recording':
+        recorder.delete(str(cmd.get('id', '')))
+        return recordings_msg()
+
+    elif c == 'recording_audio':
+        try:
+            data = await asyncio.to_thread(recorder.audio_b64, str(cmd.get('id', '')))
+        except KeyError:
+            return {'type': 'record_error', 'msg': 'recording not found'}
+        return {'type': 'recording_audio', 'id': cmd.get('id'), 'data': data}
+
+    elif c == 'recording_to_sound':
+        try:
+            sound = await asyncio.to_thread(recorder.to_sound, str(cmd.get('id', '')), cmd.get('start', 0),
+                                            cmd.get('end'), cmd.get('name'))
+        except KeyError:
+            return {'type': 'record_error', 'msg': 'recording not found'}
+        except ValueError as e:
+            return {'type': 'record_error', 'msg': str(e)}
+        return {'type': 'sounds', 'list': library.list(), 'added': sound['id'], 'from_recording': cmd.get('id')}
 
     elif c == 'set_bypass':
         engine.bypass = bool(cmd.get('value', False))
@@ -246,9 +320,18 @@ async def level_broadcaster(connections: set):
                     engine.restart_if_needed()
             if engine.last_error:
                 level['error'] = engine.last_error
+            finished = recorder.poll()  # a recording that ended by itself
+            level['capture'] = recorder.status()
         except Exception:
             continue  # don't let a transient engine error kill the broadcaster
         msg = json.dumps({'type': 'level', **level})
+        if finished:
+            msg2 = json.dumps(recordings_msg(added=finished['id']))
+            for ws in list(connections):
+                try:
+                    await ws.send(msg2)
+                except Exception:
+                    pass
         dead = set()
         for ws in connections:
             try:
@@ -340,7 +423,7 @@ def pick_real_mic():
 
 
 async def main():
-    connections: set = set()
+    connections = CONNECTIONS
 
     async def handler(ws):
         connections.add(ws)

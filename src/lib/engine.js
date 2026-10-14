@@ -20,6 +20,7 @@ export const live = {
   bands: new Array(24).fill(0),
   level: 0,
   inLevel: 0,
+  rec: { voice: 0, mac: 0 },   // capture peaks (0..1), for the recorder meters
 };
 
 let state = {
@@ -33,6 +34,10 @@ let state = {
   soundPlaying: false,
   soundError: null,
   uploading: 0,
+  recordings: [],
+  rec: null,        // recorder status: recording, seconds, replay settings, Mac capture...
+  recError: null,
+  toast: null,      // { id, text } — short confirmation (also for hotkeys)
   devices: [],
   dspVoices: bundledVoices.dsp,
   aiVoices: (bundledVoices.ai || []).map(normalizeCharacter),
@@ -77,6 +82,7 @@ function connect() {
     send({ cmd: 'get_latency' });
     send({ cmd: 'get_backend' });
     send({ cmd: 'list_sounds' });
+    send({ cmd: 'list_recordings' });
   };
   socket.onmessage = (e) => {
     try { handle(JSON.parse(e.data)); } catch { /* ignore malformed */ }
@@ -106,7 +112,30 @@ function handle(msg) {
       if (msg.voice !== undefined && msg.voice !== state.activeVoice) patch.activeVoice = msg.voice;
       if (msg.latency) patch.latency = msg.latency;
       if (msg.error) patch.lastError = msg.error;
+      if (msg.capture) {
+        const c = msg.capture;
+        live.rec.voice = Math.max(c.level?.voice || 0, live.rec.voice * 0.85);
+        live.rec.mac = Math.max(c.level?.mac || 0, live.rec.mac * 0.85);
+        // Re-render only when something visible changes (whole seconds, flags).
+        const key = JSON.stringify([c.recording, c.source, Math.floor(c.seconds), Math.floor(c.replay?.buffered || 0),
+          c.replay, c.mac_capture, c.mac_pending, c.mac_permission, c.mac_silent, c.error, c.supported]);
+        if (key !== recKey) { recKey = key; patch.rec = c; }
+      }
       if (Object.keys(patch).length) setState(patch);
+      break;
+    }
+    case 'recordings': {
+      const patch = { recordings: msg.list || [], recError: null };
+      if (msg.status) { patch.rec = msg.status; recKey = ''; }
+      const added = msg.added && (msg.list || []).find(r => r.id === msg.added);
+      if (added) patch.toast = { id: Date.now(), text: msg.replay ? `Saved the last ${Math.round(added.duration)} s` : `Recording saved · ${fmtTime(added.duration)}` };
+      setState(patch);
+      break;
+    }
+    case 'record_error': setState({ recError: msg.msg }); break;
+    case 'recording_audio': {
+      const pending = audioWaiters.get(msg.id);
+      if (pending) { audioWaiters.delete(msg.id); pending(msg.data); }
       break;
     }
     case 'virtual_mic':
@@ -124,7 +153,12 @@ function handle(msg) {
     case 'bypass': setState({ bypass: msg.value }); break;
     case 'mute': setState({ muted: msg.value }); break;
     case 'sounds':
-      setState({ sounds: msg.list || [], uploading: msg.added ? Math.max(0, state.uploading - 1) : state.uploading, soundError: null });
+      setState({
+        sounds: msg.list || [],
+        uploading: msg.added && !msg.from_recording ? Math.max(0, state.uploading - 1) : state.uploading,
+        soundError: null,
+        ...(msg.from_recording ? { toast: { id: Date.now(), text: 'Added to the soundboard' } } : {}),
+      });
       syncSoundHotkeys(msg.list || []);
       break;
     case 'sound_error': setState({ soundError: msg.msg, uploading: Math.max(0, state.uploading - 1) }); break;
@@ -144,6 +178,15 @@ function handle(msg) {
     default: break;
   }
 }
+
+let recKey = '';
+const audioWaiters = new Map();
+const audioCache = new Map();  // recording id -> blob URL
+
+export const fmtTime = (s) => {
+  const t = Math.max(0, Math.round(s || 0));
+  return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+};
 
 export function send(cmd) {
   if (socket?.readyState === WebSocket.OPEN) socket.send(JSON.stringify(cmd));
@@ -189,6 +232,41 @@ export const actions = {
     send({ cmd: 'delete_sound', id });
   },
   clearSoundError: () => setState({ soundError: null }),
+  // Recorder and instant replay ('voice' = what the call hears, 'mac' = other apps).
+  recordStart: (source) => send({ cmd: 'record_start', source }),
+  recordStop: () => send({ cmd: 'record_stop' }),
+  saveReplay: () => send({ cmd: 'replay_save' }),
+  setReplay: (settings) => {
+    if (state.rec) setState({ rec: { ...state.rec, replay: { ...state.rec.replay, ...settings } } });
+    send({ cmd: 'set_replay', settings });
+  },
+  renameRecording: (id, name) => {
+    setState({ recordings: state.recordings.map(r => (r.id === id ? { ...r, name } : r)) });
+    send({ cmd: 'rename_recording', id, name });
+  },
+  deleteRecording: (id) => {
+    setState({ recordings: state.recordings.filter(r => r.id !== id) });
+    const url = audioCache.get(id);
+    if (url) { URL.revokeObjectURL(url); audioCache.delete(id); }
+    send({ cmd: 'delete_recording', id });
+  },
+  recordingToSound: (id, start, end, name) => send({ cmd: 'recording_to_sound', id, start, end, name }),
+  clearRecError: () => setState({ recError: null }),
+  // Blob URL of a recording, for previewing it in the window.
+  recordingUrl: (id) => {
+    if (audioCache.has(id)) return Promise.resolve(audioCache.get(id));
+    return new Promise((resolve, reject) => {
+      const t = setTimeout(() => { audioWaiters.delete(id); reject(new Error('timeout')); }, 15000);
+      audioWaiters.set(id, (b64) => {
+        clearTimeout(t);
+        const bytes = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+        const url = URL.createObjectURL(new Blob([bytes], { type: 'audio/wav' }));
+        audioCache.set(id, url);
+        resolve(url);
+      });
+      send({ cmd: 'recording_audio', id });
+    });
+  },
   measureLatency: () => send({ cmd: 'measure_latency' }),
   installVirtualMic: () => send({ cmd: 'install_virtual_mic' }),
   updateSettings: (settings) => {

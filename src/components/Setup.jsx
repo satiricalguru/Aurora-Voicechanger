@@ -20,7 +20,7 @@ export default function Setup({ engine, onOpenSetup }) {
     <section id="setup" className="section">
       <div className="section-head">
         <div>
-          <div className="eyebrow">04 · Setup</div>
+          <div className="eyebrow">05 · Setup</div>
           <RevealLines className="h-section" lines={['Routing and', <span className="dim" key="d">levels.</span>]} />
           <FadeUp>
             <p className="lede">
