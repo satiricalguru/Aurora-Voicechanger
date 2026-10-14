@@ -129,13 +129,13 @@ async function main() {
   const fps = Math.max(1, n / secs);
   const enc = (args) => execFileSync('ffmpeg', ['-y', '-loglevel', 'error', ...args]);
   enc(['-framerate', fps.toFixed(3), '-i', join(frames, 'f%05d.jpg'), '-vf', 'fps=30,scale=1440:-2:flags=lanczos', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-crf', '20', '-movflags', '+faststart', join(out, 'tour.mp4')]);
-  const gif = (name, start, dur, width) => {
+  const gif = (name, start, dur, width, fps = 12) => {
     const pal = join(frames, 'pal.png');
-    enc(['-ss', String(start), '-t', String(dur), '-i', join(out, 'tour.mp4'), '-vf', `fps=12,scale=${width}:-1:flags=lanczos,palettegen=stats_mode=diff`, pal]);
-    enc(['-ss', String(start), '-t', String(dur), '-i', join(out, 'tour.mp4'), '-i', pal, '-lavfi', `fps=12,scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`, join(out, name)]);
+    enc(['-ss', String(start), '-t', String(dur), '-i', join(out, 'tour.mp4'), '-vf', `fps=${fps},scale=${width}:-1:flags=lanczos,palettegen=stats_mode=diff`, pal]);
+    enc(['-ss', String(start), '-t', String(dur), '-i', join(out, 'tour.mp4'), '-i', pal, '-lavfi', `fps=${fps},scale=${width}:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=bayer:bayer_scale=4:diff_mode=rectangle`, join(out, name)]);
     console.log('wrote', name);
   };
-  gif('tour.gif', 0, Math.min(26, secs), 800);
+  gif('tour.gif', 0, Math.min(26, secs), 760, 10);  // stays well under GitHub's 10 MB image limit
   gif('voice-switch.gif', 1.5, 5.4, 720);
 }
 
