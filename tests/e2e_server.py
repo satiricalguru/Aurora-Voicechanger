@@ -64,6 +64,11 @@ async def main(data_dir):
                 last = m
         return last
 
+    async def dbg(label):
+        if os.environ.get('E2E_DEBUG'):
+            lat = await rpc({'cmd': 'get_latency'}, 'latency')
+            print(f'  [debug] {label}: {lat.get("dropouts")}')
+
     print('Engine')
     b = await rpc({'cmd': 'get_backend'}, 'backend')
     check(b['backend'] == 'native', f"native backend ({b['backend']})")
@@ -78,6 +83,7 @@ async def main(data_dir):
     st = await rpc({'cmd': 'set_devices', 'input': mic['index'], 'output': vm['index']}, 'status')
     check(st['running'], 'stream running')
 
+    await dbg('after set_devices')
     print('Voices')
     v = await rpc({'cmd': 'get_voices'}, 'voices')
     check(len(v['dsp']) == 49 and len(v['ai']) >= 28, f"{len(v['dsp'])} effects, {len(v['ai'])} characters")
@@ -91,6 +97,7 @@ async def main(data_dir):
     r = await rpc({'cmd': 'set_param', 'effect': 'pitch', 'param': 'semitones', 'value': 6})
     check(r['type'] == 'ok', 'live parameter change')
 
+    await dbg('after voices')
     print('Toggles')
     r = await rpc({'cmd': 'toggle_bypass'}, 'bypass')
     check(r['value'] is True, 'voice off')
@@ -102,6 +109,7 @@ async def main(data_dir):
     r = await rpc({'cmd': 'toggle_mute'}, 'mute')
     check(r['value'] is False, 'unmute')
 
+    await dbg('after toggles')
     print('Noise removal')
     sr = (await rpc({'cmd': 'get_latency'}, 'latency')).get('sample_rate', 48000)
     # Studio runs RNNoise's own 48 kHz path; other mic rates use Balanced.
@@ -112,9 +120,10 @@ async def main(data_dir):
         check(abs(lat.get('nr_ms', 0) - want) < 0.5, f"{mode}: +{lat.get('nr_ms')} ms")
     await rpc({'cmd': 'set_audio_settings', 'settings': {'noise_reduction_enabled': False}}, 'audio_settings')
 
+    await dbg('before soundboard')
     print('Soundboard')
     lst = (await rpc({'cmd': 'list_sounds'}, 'sounds'))['list']
-    check(sum(1 for s in lst if s['builtin']) == 12, '12 built-in pads')
+    check(sum(1 for s in lst if s['builtin']) == 23, '23 built-in pads')
     r = await rpc({'cmd': 'add_sound', 'name': 'Test', 'filename': 'test.wav', 'data': base64.b64encode(wav_bytes()).decode()})
     check(r['type'] == 'sounds' and r.get('added'), 'upload WAV')
     sid = r['added']
@@ -143,6 +152,7 @@ async def main(data_dir):
     r = await rpc({'cmd': 'delete_sound', 'id': sid}, 'sounds')
     check(all(x['id'] != sid for x in r['list']), 'delete')
 
+    await dbg('before recorder')
     print('Recorder and instant replay')
     r = await rpc({'cmd': 'list_recordings'}, 'recordings')
     st = r['status']
@@ -196,13 +206,14 @@ async def main(data_dir):
     check(r['list'] == [], 'delete')
     check(not any(f.endswith('.wav') for f in os.listdir(os.path.join(data_dir, 'recordings'))), 'files removed')
 
+    await dbg('before latency')
     print('Latency')
     await rpc({'cmd': 'set_voice', 'id': 'kawaii'}, 'voice_set')
     await asyncio.sleep(1.0)
     m = await rpc({'cmd': 'measure_latency'}, 'latency')
     ok = m.get('measured_ms') and abs(m['measured_ms'] - m['total_ms']) < 6
     check(bool(ok), f"loopback {m.get('measured_ms')} ms vs estimate {m.get('total_ms')} ms, {m.get('xruns')} dropouts")
-    check(m.get('xruns', 1) == 0, 'no dropouts during the run')
+    check(m.get('xruns', 1) == 0, f"no dropouts during the run {m.get('dropouts')}")
 
     await rpc({'cmd': 'stop'}, 'stopped')
     await ws.close()

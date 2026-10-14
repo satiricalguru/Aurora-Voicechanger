@@ -26,19 +26,32 @@ MAX_UPLOAD_BYTES = 25 * 1024 * 1024
 MAX_SECONDS = 120.0
 PALETTE = ['#ffb764', '#b855e7', '#0088ff', '#16c253', '#e6714f', '#dd55e7', '#60a5fa', '#ffdd00']
 
+# Built-in pads: clips from myinstants.com, stored in python/sounds/<file>.mp3.
+SOUNDS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sounds')
 BUILTIN = [
-    {'id': 'b0', 'name': 'Chime', 'color': '#27c93f', 'sound': 0},
-    {'id': 'b1', 'name': 'Applause', 'color': '#ffdd00', 'sound': 1},
-    {'id': 'b2', 'name': 'Drum Roll', 'color': '#e6714f', 'sound': 2},
-    {'id': 'b3', 'name': 'Evil Laugh', 'color': '#b855e7', 'sound': 3},
-    {'id': 'b4', 'name': 'Crickets', 'color': '#16c253', 'sound': 4},
-    {'id': 'b5', 'name': 'Oof', 'color': '#0088ff', 'sound': 5},
-    {'id': 'b6', 'name': 'Sad Trombone', 'color': '#e6714f', 'sound': 6},
-    {'id': 'b7', 'name': 'Boom', 'color': '#dd55e7', 'sound': 7},
-    {'id': 'b8', 'name': 'Air Horn', 'color': '#ffb764', 'sound': 8},
-    {'id': 'b9', 'name': 'Night', 'color': '#4b52aa', 'sound': 9},
-    {'id': 'b10', 'name': 'Ba Dum Tss', 'color': '#ffb764', 'sound': 10},
-    {'id': 'b11', 'name': 'Ding', 'color': '#27c93f', 'sound': 11},
+    {'id': 'b0', 'name': 'Heyy Daddy', 'color': '#ff6fb5', 'file': 'heyy-daddy'},
+    {'id': 'b1', 'name': 'UwU', 'color': '#ff8fd0', 'file': 'girl-uwu'},
+    {'id': 'b2', 'name': 'UwU Discord Girl', 'color': '#dd55e7', 'file': 'uwu-discord'},
+    {'id': 'b3', 'name': 'Discord Ping', 'color': '#5865f2', 'file': 'discord-ping'},
+    {'id': 'b4', 'name': 'Discord Join', 'color': '#5865f2', 'file': 'discord-join'},
+    {'id': 'b5', 'name': 'Discord Leave', 'color': '#5865f2', 'file': 'discord-leave'},
+    {'id': 'b6', 'name': 'Discord Call', 'color': '#5865f2', 'file': 'discord-call'},
+    {'id': 'b7', 'name': 'Cat Scream', 'color': '#e6714f', 'file': 'discord-cat-scream'},
+    {'id': 'b8', 'name': 'Vine Boom', 'color': '#ffb764', 'file': 'vine-boom'},
+    {'id': 'b9', 'name': 'Bruh', 'color': '#888b91', 'file': 'bruh'},
+    {'id': 'b10', 'name': 'Emotional Damage', 'color': '#e6714f', 'file': 'emotional-damage'},
+    {'id': 'b11', 'name': 'FBI Open Up', 'color': '#0088ff', 'file': 'fbi-open-up'},
+    {'id': 'b12', 'name': 'MLG Air Horn', 'color': '#ffdd00', 'file': 'airhorn'},
+    {'id': 'b13', 'name': 'Sad Violin', 'color': '#4b52aa', 'file': 'sad-violin'},
+    {'id': 'b14', 'name': 'Anime Wow', 'color': '#b855e7', 'file': 'anime-wow'},
+    {'id': 'b15', 'name': 'Rizz', 'color': '#16c253', 'file': 'rizz'},
+    {'id': 'b16', 'name': 'Among Us', 'color': '#e6714f', 'file': 'among-us'},
+    {'id': 'b17', 'name': 'Taco Bell Bong', 'color': '#b855e7', 'file': 'taco-bell'},
+    {'id': 'b18', 'name': 'Windows XP Off', 'color': '#60a5fa', 'file': 'windows-xp'},
+    {'id': 'b19', 'name': 'Goku Drip', 'color': '#ffb764', 'file': 'goku-drip'},
+    {'id': 'b20', 'name': 'Anime Ahh', 'color': '#ff6fb5', 'file': 'anime-ahh'},
+    {'id': 'b21', 'name': 'Fahhh', 'color': '#e6714f', 'file': 'fahhh'},
+    {'id': 'b22', 'name': 'Gop Gop Gop', 'color': '#16c253', 'file': 'gopgopgop'},
 ]
 
 
@@ -76,7 +89,8 @@ class SoundLibrary:
             pass
         out = []
         for b in BUILTIN:
-            s = {'volume': 1.0, 'loop': False, 'hotkey': None, 'duration': 2.0, **b, 'builtin': True}
+            s = {'volume': 1.0, 'loop': False, 'hotkey': None, **b, 'builtin': True}
+            s['duration'] = round(self._builtin_seconds(b['file']), 2)
             s.update({k: v for k, v in builtin_settings.get(b['id'], {}).items() if k in ('volume', 'hotkey', 'loop')})
             out.append(s)
         return out + user
@@ -188,14 +202,34 @@ class SoundLibrary:
         if s is None:
             return None
         if s.get('builtin'):
-            from engine import generate_sound
-            data = generate_sound(int(s['sound']), SR)
+            data = self._cache.get(sid)
+            if data is None:
+                data = self._decode_builtin(s['file'])
+                self._cache[sid] = data
         else:
             data = self._cache.get(sid)
             if data is None:
                 data = self._read(sid)
                 self._cache[sid] = data
         return (data * float(s.get('volume', 1.0))).astype(np.float32)
+
+    def _decode_builtin(self, name: str) -> np.ndarray:
+        """A built-in clip as 48 kHz mono float, decoded once by afconvert."""
+        with tempfile.TemporaryDirectory() as tmp:
+            dst = os.path.join(tmp, 'b.wav')
+            subprocess.run(['afconvert', '-f', 'WAVE', '-d', f'LEF32@{SR}', '-c', '1',
+                            os.path.join(SOUNDS_DIR, name + '.mp3'), dst], check=True, capture_output=True, timeout=30)
+            x = read_wav(dst)
+        peak = float(np.max(np.abs(x))) or 1.0
+        return (x * min(1.0, 0.9 / peak) if peak > 0.9 else x).astype(np.float32)
+
+    @staticmethod
+    def _builtin_seconds(name: str) -> float:
+        try:
+            out = subprocess.run(['afinfo', os.path.join(SOUNDS_DIR, name + '.mp3')], capture_output=True, text=True, timeout=10).stdout
+            return float(re.search(r'estimated duration: ([0-9.]+)', out).group(1))
+        except (OSError, AttributeError, ValueError, subprocess.SubprocessError):
+            return 2.0
 
     def _read(self, sid: str) -> np.ndarray:
         return read_wav(self._wav(sid))

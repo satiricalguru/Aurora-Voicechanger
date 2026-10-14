@@ -317,6 +317,13 @@ class NativeAudioEngine:
             self.start(self._input_idx, self._output_idx)
             if mon is not None:
                 self.start_monitor(mon)
+        elif st.get('running') and st.get('monitor_changed'):
+            # Headphones changed rate (e.g. AirPods into headset mode): reopen at the new rate.
+            print("[native] Monitor device changed; reopening it")
+            if self.monitor_device is not None:
+                self.start_monitor(self.monitor_device)
+            else:
+                self._open_preview()
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
@@ -484,6 +491,9 @@ class NativeAudioEngine:
             'dsp_ms': st.get('dsp_time_ms', 0.0),     # processing time per block
             'cpu': st.get('cpu', 0.0),
             'xruns': st.get('xruns', 0),
+            'dropouts': {'output': st.get('underruns', 0), 'monitor': st.get('monitor_underruns', 0),
+                         'overloads': st.get('overloads', 0), 'model': st.get('model_underruns', 0),
+                         'monitor_ring': st.get('monitor')},
             'backend': 'native',
         }
         if self._measured_ms is not None:

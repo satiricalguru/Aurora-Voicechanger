@@ -380,12 +380,25 @@ public:
         OSStatus err = AudioDeviceCreateIOProcID(dev, &Engine::monitorProc, this, &monProc_);
         if (err != noErr) return fail("monitor IOProc failed: " + std::to_string(err));
         monDev_ = dev;
+        monitorChanged_.store(false);
+        // Bluetooth headphones switch rate (48k music <-> 24k headset) when any
+        // app opens their mic; the drift reader's ratio must follow.
+        for (AudioObjectPropertySelector sel : kWatched) {
+            auto a = addr(sel);
+            AudioObjectAddPropertyListener(dev, &a, &Engine::onMonitorProp, this);
+        }
         monitoring_.store(true);
         if ((err = AudioDeviceStart(dev, monProc_)) != noErr) { stopMonitorLocked(); return fail("monitor start failed"); }
         return 0;
     }
 
     void stopMonitorLocked() {
+        if (monDev_ != kAudioObjectUnknown) {
+            for (AudioObjectPropertySelector sel : kWatched) {
+                auto a = addr(sel);
+                AudioObjectRemovePropertyListener(monDev_, &a, &Engine::onMonitorProp, this);
+            }
+        }
         if (monDev_ != kAudioObjectUnknown && monProc_) {
             monitoring_.store(false);
             AudioDeviceStop(monDev_, monProc_);
@@ -554,6 +567,9 @@ private:
     std::atomic<uint64_t> inCycles_{0};
     std::atomic<uint32_t> overloads_{0};
     std::atomic<bool> deviceChanged_{false};
+public:
+    std::atomic<bool> monitorChanged_{false};  // monitor device changed rate or went away: reopen it
+private:
     float scope_[kScope] = {};
     std::atomic<int> scopePos_{0};
 
@@ -605,6 +621,11 @@ private:
             if (a[i].mSelector == kAudioDeviceProcessorOverload) e->overloads_.fetch_add(1);
             else e->deviceChanged_.store(true);
         }
+        return noErr;
+    }
+    static OSStatus onMonitorProp(AudioObjectID, UInt32 n, const AudioObjectPropertyAddress* a, void* self) {
+        for (UInt32 i = 0; i < n; ++i)
+            if (a[i].mSelector != kAudioDeviceProcessorOverload) static_cast<Engine*>(self)->monitorChanged_.store(true);
         return noErr;
     }
     void addListeners(AudioObjectID dev) {
@@ -919,9 +940,19 @@ std::string Engine::statsJson() {
     w.kv("model_step_ms", current_ ? current_->workerStepMs() : 0.0, 3);
     w.kv("model_cpu", current_ ? current_->workerLoad() : 0.0, 3);
     w.kvi("underruns", outReader_.underruns.load());
+    w.kvi("monitor_underruns", monReader_.underruns.load());
+    w.key("monitor");
+    w.beginObj();
+    w.kv("rate", monSr_, 0);
+    w.kvi("buffer", monBuf_);
+    w.kv("queued_ms", monReader_.queued() * 1000.0 / sr_, 2);
+    w.kv("target_ms", monReader_.target() * 1000.0 / sr_, 2);
+    w.kv("ratio", monReader_.ratio(), 6);
+    w.endObj();
     w.kvi("overloads", overloads_.load());
     w.kvi("cycles", (long long)inCycles_.load());
     w.kvb("device_changed", deviceChanged_.load());
+    w.kvb("monitor_changed", monitoring_.load() && monitorChanged_.load());
 
     // 24 log-spaced spectrum bands of the last 1024 output samples, 0..1.
     static dsp::RealFFT fft;
